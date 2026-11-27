@@ -352,12 +352,12 @@ export function createApp(deps: AppDependencies = {}): express.Express {
       redirectUrl,
       message:
         result.status === 'confirmed'
-          ? 'Payment confirmed! Your festival boarding passes and invoice are ready.'
+          ? 'Payment confirmed! Your festival passes and invoice are ready.'
           : 'Booking cancelled and held tickets returned to availability.',
     });
   });
 
-  // Vector Plane-Ticket Boarding Pass PDF
+  // Vector Festival Pass PDF
   api.get('/bookings/:id/passes.pdf', async (req, res) => {
     const detail = await store.getBookingDetail(req.params.id, clock.now());
     if (!detail) {
@@ -366,7 +366,7 @@ export function createApp(deps: AppDependencies = {}): express.Express {
     if (detail.status !== 'confirmed') {
       throw new ConflictError(
         'NOT_CONFIRMED',
-        'Boarding passes are only issued once payment is confirmed.',
+        'Festival passes are only issued once payment is confirmed.',
       );
     }
 

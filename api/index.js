@@ -1762,7 +1762,7 @@ async function generateBoardingPassesPdf(booking, passes) {
       margin: 0,
       autoFirstPage: false,
       info: {
-        Title: `Sharad Utsav 2026 Boarding Passes - ${booking.reference}`,
+        Title: `Sharad Utsav 2026 Festival Passes - ${booking.reference}`,
         Author: EVENT_METADATA.venue
       }
     });
@@ -1773,27 +1773,45 @@ async function generateBoardingPassesPdf(booking, passes) {
     passes.forEach((pass, idx) => {
       doc.addPage({ size: [680, 290], margin: 0 });
       doc.rect(0, 0, 680, 290).fill("#2C2C2C");
-      doc.roundedRect(16, 16, 648, 258, 12).fillAndStroke("#FDF3E4", "#BC9226");
+      doc.roundedRect(16, 16, 648, 258, 12).fill("#FDF3E4");
       doc.save();
-      doc.roundedRect(16, 16, 648, 56, 12).clip();
-      doc.rect(16, 16, 648, 56).fill("#291900");
+      doc.roundedRect(16, 16, 648, 258, 12).clip();
+      doc.rect(16, 16, 648, 54).fill("#291900");
+      doc.moveTo(16, 70).lineTo(664, 70).lineWidth(2).strokeColor("#C99B24").stroke();
       doc.restore();
-      doc.moveTo(16, 72).lineTo(664, 72).lineWidth(2).strokeColor("#C99B24").stroke();
-      doc.fillColor("#D1AC3E").font("Helvetica-Bold").fontSize(9).text("RADHA KRISHNA TEMPLE · ALLEN, TX", 32, 27, { width: 420 });
-      doc.fillColor("#FDF3E4").font("Times-Bold").fontSize(20).text("SHARAD UTSAV 2026 · FESTIVAL BOARDING PASS", 32, 41, { width: 430 });
-      doc.fillColor("#D1AC3E").font("Helvetica-Bold").fontSize(9).text("BOARDING STUB", 492, 28, { width: 156, align: "center" });
-      doc.fillColor("#FDF3E4").font("Helvetica-Bold").fontSize(13).text(booking.reference, 492, 44, { width: 156, align: "center" });
-      doc.circle(476, 16, 10).fill("#2C2C2C");
-      doc.circle(476, 274, 10).fill("#2C2C2C");
-      doc.save().dash(5, { space: 4 }).moveTo(476, 30).lineTo(476, 260).lineWidth(1.2).strokeColor("#BC9226").stroke().restore();
-      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("PASSHOLDER", 32, 84);
-      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(15).text(pass.fullName, 32, 95, { width: 250, ellipsis: true });
-      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("PASS CATEGORY", 295, 84);
-      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(11).text(`${pass.passLabel} (Age ${pass.age})`, 295, 97, { width: 165, ellipsis: true });
-      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("VALIDITY DATES", 32, 126);
-      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(10.5).text(pass.validDatesDisplay, 32, 138, { width: 426 });
-      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("EXTRAS AVAILED BY PASSHOLDER", 32, 162);
-      doc.fillColor("#291900").font("Helvetica").fontSize(10).text(pass.extrasSummary.join("  •  "), 32, 174, { width: 426, ellipsis: true });
+      doc.roundedRect(16, 16, 648, 258, 12).lineWidth(1).strokeColor("#BC9226").stroke();
+      doc.fillColor("#FDF3E4").font("Times-Bold").fontSize(21).text("SHARAD UTSAV 2026", 32, 34, {
+        width: 424,
+        characterSpacing: 0.5,
+        lineBreak: false
+      });
+      doc.fillColor("#D1AC3E").font("Helvetica-Bold").fontSize(8).text("BOOKING REF", 492, 26, {
+        width: 156,
+        align: "center",
+        characterSpacing: 0.8,
+        lineBreak: false
+      });
+      doc.fillColor("#FDF3E4").font("Helvetica-Bold").fontSize(13).text(booking.reference, 492, 41, {
+        width: 156,
+        align: "center",
+        lineBreak: false
+      });
+      doc.save().dash(5, { space: 4 }).moveTo(476, 28).lineTo(476, 262).lineWidth(1.2).strokeColor("#BC9226").stroke().restore();
+      doc.save();
+      doc.roundedRect(16, 16, 648, 258, 12).clip();
+      doc.circle(476, 16, 10).fillAndStroke("#2C2C2C", "#BC9226");
+      doc.circle(476, 274, 10).fillAndStroke("#2C2C2C", "#BC9226");
+      doc.restore();
+      doc.rect(464, 4, 24, 12).fill("#2C2C2C");
+      doc.rect(464, 274, 24, 12).fill("#2C2C2C");
+      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("PASSHOLDER", 32, 86);
+      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(15).text(pass.fullName, 32, 97, { width: 250, ellipsis: true });
+      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("PASS CATEGORY", 295, 86);
+      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(11).text(`${pass.passLabel} (Age ${pass.age})`, 295, 99, { width: 165, ellipsis: true });
+      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("VALIDITY DATES", 32, 127);
+      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(10.5).text(pass.validDatesDisplay, 32, 139, { width: 426 });
+      doc.fillColor("#645743").font("Helvetica-Bold").fontSize(8).text("EXTRAS AVAILED BY PASSHOLDER", 32, 163);
+      doc.fillColor("#291900").font("Helvetica").fontSize(10).text(pass.extrasSummary.join("  •  "), 32, 175, { width: 426, ellipsis: true });
       if (pass.guardianName && pass.guardianPhone) {
         doc.roundedRect(32, 198, 426, 42, 6).fillAndStroke("#F6E5C4", "#C99B24");
         doc.fillColor("#291900").font("Helvetica-Bold").fontSize(8.5).text("MINOR SAFEGUARD · REGISTERED GUARDIAN", 42, 205);
@@ -1809,11 +1827,11 @@ async function generateBoardingPassesPdf(booking, passes) {
       }
       const qrBuf = qrBuffers[idx];
       if (qrBuf) {
-        doc.image(qrBuf, 513, 84, { width: 114, height: 114 });
+        doc.image(qrBuf, 513, 86, { width: 114, height: 114 });
       }
-      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(11).text(pass.passCode, 492, 206, { width: 156, align: "center" });
-      doc.fillColor("#645743").font("Helvetica").fontSize(8.5).text(`Pass ${idx + 1} of ${passes.length}`, 492, 224, { width: 156, align: "center" });
-      doc.fillColor("#1E7A29").font("Helvetica-Bold").fontSize(9).text("PAID · CONFIRMED", 492, 242, { width: 156, align: "center" });
+      doc.fillColor("#291900").font("Helvetica-Bold").fontSize(11).text(pass.passCode, 492, 207, { width: 156, align: "center" });
+      doc.fillColor("#645743").font("Helvetica").fontSize(8.5).text(`Pass ${idx + 1} of ${passes.length}`, 492, 225, { width: 156, align: "center" });
+      doc.fillColor("#1E7A29").font("Helvetica-Bold").fontSize(9).text("PAID · CONFIRMED", 492, 243, { width: 156, align: "center" });
     });
     doc.end();
   });
@@ -2803,9 +2821,9 @@ function renderConfirmationEmail(input) {
       </div>
       <div style="padding:24px;">
         <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">
-          Namaste <strong>${escapeHtml(input.bookerName)}</strong>, your festival passes are confirmed! Your boarding-pass style tickets and itemized invoice (${escapeHtml(input.invoiceNumber)}) are attached below.
+          Namaste <strong>${escapeHtml(input.bookerName)}</strong>, your festival passes are confirmed! Your festival passes and itemized invoice (${escapeHtml(input.invoiceNumber)}) are attached below.
         </p>
-        <h2 style="font-family:Georgia,serif;font-size:18px;color:#D1AC3E;margin:20px 0 10px;">Issued Boarding Passes (${input.passes.length})</h2>
+        <h2 style="font-family:Georgia,serif;font-size:18px;color:#D1AC3E;margin:20px 0 10px;">Issued Festival Passes (${input.passes.length})</h2>
         ${passCardsHtml}
         <div style="background:#FDF3E4;border-radius:10px;padding:16px;margin-top:18px;color:#291900;">
           <div style="font-weight:700;font-size:15px;margin-bottom:8px;">Payment Summary · Invoice ${escapeHtml(input.invoiceNumber)}</div>
@@ -4849,7 +4867,7 @@ function createApp(deps = {}) {
       reference: result.reference,
       status: result.status,
       redirectUrl,
-      message: result.status === "confirmed" ? "Payment confirmed! Your festival boarding passes and invoice are ready." : "Booking cancelled and held tickets returned to availability."
+      message: result.status === "confirmed" ? "Payment confirmed! Your festival passes and invoice are ready." : "Booking cancelled and held tickets returned to availability."
     });
   });
   api.get("/bookings/:id/passes.pdf", async (req, res) => {
@@ -4860,7 +4878,7 @@ function createApp(deps = {}) {
     if (detail.status !== "confirmed") {
       throw new ConflictError(
         "NOT_CONFIRMED",
-        "Boarding passes are only issued once payment is confirmed."
+        "Festival passes are only issued once payment is confirmed."
       );
     }
     const attendeeIdFilter = typeof req.query.attendeeId === "string" ? req.query.attendeeId : void 0;

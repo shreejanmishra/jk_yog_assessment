@@ -12,6 +12,7 @@ const nodeBuiltins = new Set([
 await build({
   configFile: false,
   root: rootDir,
+  publicDir: false,
   logLevel: 'info',
   resolve: {
     alias: {

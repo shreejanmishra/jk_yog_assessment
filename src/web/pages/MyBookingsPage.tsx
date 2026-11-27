@@ -184,7 +184,7 @@ export function MyBookingsPage(): React.ReactElement {
       <Modal
         open={Boolean(passModalBooking)}
         onClose={() => setPassModalBooking(null)}
-        title="Boarding passes"
+        title="Festival passes"
         subtitle={
           passModalBooking
             ? `${passModalBooking.event.name} · ${passModalBooking.passes.length} ${
@@ -230,7 +230,7 @@ export function MyBookingsPage(): React.ReactElement {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
               <span className="text-xs text-white/55">
-                One boarding-pass page per attendee
+                One festival pass page per attendee
               </span>
               <a href={getPassesPdfUrl(passModalBooking.bookingId)} download>
                 <Button>
