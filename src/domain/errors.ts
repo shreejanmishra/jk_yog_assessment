@@ -1,0 +1,51 @@
+export type RuleViolationCode =
+  | 'BOOKER_NAME_REQUIRED'
+  | 'BOOKER_EMAIL_INVALID'
+  | 'BOOKER_PHONE_INVALID'
+  | 'BOOKER_UNDER_18'
+  | 'AGE_INVALID'
+  | 'NO_ATTENDEES'
+  | 'INDIVIDUAL_MODE_COUNT'
+  | 'GROUP_TOO_LARGE'
+  | 'ATTENDEE_NAME_REQUIRED'
+  | 'ATTENDEE_PHONE_REQUIRED'
+  | 'ATTENDEE_PHONE_INVALID'
+  | 'ATTENDEE_EMAIL_INVALID'
+  | 'ATTENDEE_TYPE_AGE_MISMATCH'
+  | 'GUARDIAN_NAME_REQUIRED'
+  | 'GUARDIAN_PHONE_REQUIRED'
+  | 'GUARDIAN_PHONE_INVALID'
+  | 'PASS_KIND_INCOMPATIBLE'
+  | 'DAY_PASS_NO_DAYS'
+  | 'INVALID_FESTIVAL_DAY'
+  | 'DUPLICATE_DAY'
+  | 'DAY_IN_PAST'
+  | 'FAMILY_GROUP_UNKNOWN'
+  | 'FAMILY_GROUP_EMPTY'
+  | 'FAMILY_GROUP_COMPOSITION'
+  | 'EXTRA_DAY_NOT_ATTENDING'
+  | 'WORKSHOP_DAY_INVALID'
+  | 'WORKSHOP_INFANT_INELIGIBLE'
+  | 'QUANTITY_OUT_OF_RANGE'
+  | 'PRODUCT_SOLD_OUT'
+  | 'INSUFFICIENT_STOCK'
+  | 'PROMO_NOT_FOUND'
+  | 'PROMO_EXPIRED'
+  | 'PROMO_EXHAUSTED'
+  | 'PROMO_NOT_APPLICABLE';
+
+export interface RuleViolation {
+  readonly code: RuleViolationCode;
+  readonly path: string;
+  readonly message: string;
+}
+
+export type QuoteWarningCode =
+  | 'CHEAPER_OPTION_AVAILABLE'
+  | 'LOW_STOCK'
+  | 'DUPLICATE_ATTENDEE_NAME';
+
+export interface QuoteWarning {
+  readonly code: QuoteWarningCode;
+  readonly message: string;
+}
