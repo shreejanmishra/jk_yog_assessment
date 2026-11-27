@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette from specification */
+  --color-primary-dark: #2C2C2C;
+  --color-primary: #C99B24;
+  --color-gold: #BC9226;
+  --color-bright-gold: #D1AC3E;
+  --color-cream: #FDF3E4;
+  --color-heading: #291900;
+  --color-primary-text: #645743;
+  --color-white: #FFFFFF;
+  --color-success: #28A736;
+  --color-error: #EF1F1F;
+
+  /* WCAG 2.2 AA derived accessible text & surface tokens */
+  --color-error-on-dark: #FF7A7A;
+  --color-error-on-light: #C41818;
+  --color-success-on-dark: #4CC75A;
+  --color-success-on-light: #1E7A29;
+  --color-warning-on-dark: #F5C76B;
+  --color-glass: rgb(255 255 255 / 0.05);
+  --color-glass-border: rgb(255 255 255 / 0.2);
+  --color-surface-elevated: #353535;
+
+  /* Typography */
+  --font-serif: "Playfair Display", Georgia, Cambria, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Radii */
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-primary-dark);
+    color: var(--color-white);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-serif);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-bright-gold);
+    outline-offset: 2px;
+  }
+}
+
+/* Boarding pass decorative notch utility */
+.ticket-perforation {
+  background-image: linear-gradient(to bottom, #BC9226 50%, transparent 50%);
+  background-position: left;
+  background-size: 2px 12px;
+  background-repeat: repeat-y;
+}
