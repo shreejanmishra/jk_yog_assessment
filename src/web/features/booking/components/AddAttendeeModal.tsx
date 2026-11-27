@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildCategoryMismatchMessage,
   classifyAge,
+  computeAttendeeIdentityKey,
   FESTIVAL_DAYS,
   formatCategoryLabel,
   isValidAgeInteger,
   isValidEmail,
   isValidPhone,
   matchesSelectedCategory,
+  normalizePersonName,
+  normalizePhoneKey,
   requiresGuardian,
   type AttendeeCategoryChoice,
 } from '@domain/index';
 import { Button } from '../../../ui/Button';
 import { Modal } from '../../../ui/Modal';
-import { TextField } from '../../../ui/TextField';
+import { SegmentedControl, type SegmentedOption } from '../../../ui/SegmentedControl';
+import { FieldError, TextField } from '../../../ui/TextField';
 import {
   changeAttendeeCategory,
   parseIntegerAge,
@@ -26,10 +30,18 @@ import { PassDaySelector } from './PassDaySelector';
 export interface AddAttendeeModalProps {
   open: boolean;
   initialAttendee?: AttendeeDraft | null;
+  initialShowErrors?: boolean;
+  existingAttendees?: readonly AttendeeDraft[];
   bookerQuickFill?: { name: string; phone: string } | null;
   onClose: () => void;
   onSave: (attendee: AttendeeDraft) => void;
 }
+
+const ATTENDEE_CATEGORIES: readonly SegmentedOption<AttendeeCategoryChoice>[] = [
+  { value: 'adult', label: 'Adult', description: 'Ages 12+ · $15 / evening' },
+  { value: 'child', label: 'Child', description: 'Ages 5–11 · $8 / evening' },
+  { value: 'infant', label: 'Under 5 (free)', description: 'Ages 0–4 · Free' },
+];
 
 function createBlankAttendee(category: AttendeeCategoryChoice = 'adult'): AttendeeDraft {
   const id =
@@ -62,24 +74,36 @@ function createBlankAttendee(category: AttendeeCategoryChoice = 'adult'): Attend
 export function AddAttendeeModal({
   open,
   initialAttendee,
+  initialShowErrors = false,
+  existingAttendees = [],
   bookerQuickFill,
   onClose,
   onSave,
 }: AddAttendeeModalProps): React.ReactElement {
+  const formId = React.useId();
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<AttendeeDraft>(() => createBlankAttendee('adult'));
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setAttempted(false);
+    setAttempted(initialShowErrors);
     setForm(initialAttendee ? { ...initialAttendee } : createBlankAttendee('adult'));
-  }, [open, initialAttendee]);
+    if (initialShowErrors) {
+      window.requestAnimationFrame(() => {
+        const firstInvalid = bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+        if (firstInvalid) {
+          firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          firstInvalid.focus({ preventScroll: true });
+        }
+      });
+    }
+  }, [open, initialAttendee, initialShowErrors]);
 
   const parsedAge = parseIntegerAge(form.ageInput);
   const hasAge = form.ageInput.trim().length > 0;
   const validIntAge = hasAge && isValidAgeInteger(parsedAge);
 
-  // Category vs Age mismatch detection (with exclamation error + 1-click switch helper)
   const isCategoryMismatch =
     validIntAge && !matchesSelectedCategory(parsedAge, form.selectedCategory);
   let ageError: string | null = null;
@@ -87,21 +111,60 @@ export function AddAttendeeModal({
     if (!hasAge) {
       ageError = 'Please enter the attendee’s age.';
     } else if (!isValidAgeInteger(parsedAge)) {
-      ageError = 'Please enter a valid whole-number age between 0 and 120.';
+      ageError = 'Please enter a whole-number age between 0 and 120.';
     } else if (isCategoryMismatch) {
       ageError = buildCategoryMismatchMessage(parsedAge, form.selectedCategory);
     }
   }
 
-  // Guardian fields show ALWAYS for Child (5-11) & Under 5 (0-4), AND gracefully appear
-  // on Adult (12+) forms whenever the entered age is 12–17!
+  // Guardian required for Child (5–11), Under 5 (0–4), and 12–17 on Adult passes.
   const needsGuardian =
     form.selectedCategory === 'child' ||
     form.selectedCategory === 'infant' ||
     (validIntAge && requiresGuardian(parsedAge));
 
+  // Uniqueness check against other attendees in this booking:
+  // - Adult / 12–17 minor: unique attendee phone number
+  // - Child / Under 5: unique combination of (guardian phone + attendee full name)
+  const duplicateAttendee = useMemo(() => {
+    const candidateKey = computeAttendeeIdentityKey({
+      category: form.selectedCategory,
+      fullName: form.fullName,
+      phone: form.phone,
+      guardianPhone: form.guardian.phone,
+    });
+    if (!candidateKey) return null;
+
+    return (
+      existingAttendees.find((other) => {
+        if (other.clientId === form.clientId) return false;
+        const otherKey = computeAttendeeIdentityKey({
+          category: other.selectedCategory,
+          fullName: other.fullName,
+          phone: other.phone,
+          guardianPhone: other.guardian.phone,
+        });
+        return otherKey === candidateKey;
+      }) ?? null
+    );
+  }, [
+    existingAttendees,
+    form.clientId,
+    form.selectedCategory,
+    form.fullName,
+    form.phone,
+    form.guardian.phone,
+  ]);
+
+  const duplicateChildOrInfantError =
+    form.selectedCategory !== 'adult' && duplicateAttendee
+      ? `“${form.fullName.trim()}” is already added under guardian phone ${form.guardian.phone.trim()}. Use a different child’s name for a sibling pass.`
+      : null;
+
   const nameError =
-    attempted && form.fullName.trim().length < 2 ? 'Please enter full name.' : null;
+    attempted && form.fullName.trim().length < 2
+      ? 'Please enter the attendee’s full name.'
+      : duplicateChildOrInfantError;
 
   const phoneError = (() => {
     if (form.selectedCategory === 'adult') {
@@ -111,10 +174,14 @@ export function AddAttendeeModal({
       if (form.phone.trim().length > 0 && !isValidPhone(form.phone)) {
         return 'Please enter a valid phone number (7–15 digits).';
       }
+      if (duplicateAttendee) {
+        const who = duplicateAttendee.fullName.trim() || 'the lead booker';
+        return `This phone number is already used by ${who} in this booking. Each adult or minor (12+) passholder needs a unique phone number.`;
+      }
       return null;
     }
     if (form.phone.trim().length > 0 && !isValidPhone(form.phone)) {
-      return 'Please enter a valid optional phone number (7–15 digits).';
+      return 'Please enter a valid phone number (7–15 digits).';
     }
     return null;
   })();
@@ -124,43 +191,124 @@ export function AddAttendeeModal({
       ? 'Please enter a valid email address.'
       : null;
 
-  const guardianNameError =
-    attempted && needsGuardian && form.guardian.name.trim().length < 2
-      ? 'Guardian name is required before booking a pass for a minor.'
-      : null;
+  const guardianNameError = (() => {
+    if (!needsGuardian) return null;
+    const gNameNorm = normalizePersonName(form.guardian.name);
+    const attNameNorm = normalizePersonName(form.fullName);
 
-  const guardianPhoneError =
-    attempted && needsGuardian && !isValidPhone(form.guardian.phone)
-      ? 'Valid guardian phone number is required before booking a pass for a minor.'
-      : null;
+    if (gNameNorm.length >= 2 && attNameNorm.length >= 2 && gNameNorm === attNameNorm) {
+      return 'Guardian full name cannot be the same as the minor’s own name.';
+    }
+    if (gNameNorm.length >= 2) {
+      const otherMinor = existingAttendees.find((other) => {
+        if (other.clientId === form.clientId) return false;
+        const otherAge = parseIntegerAge(other.ageInput);
+        const isOtherMinor =
+          other.selectedCategory !== 'adult' ||
+          (isValidAgeInteger(otherAge) && requiresGuardian(otherAge));
+        return isOtherMinor && normalizePersonName(other.fullName) === gNameNorm;
+      });
+      if (otherMinor) {
+        return `Guardian must be an adult (18+), not a minor in this booking (${otherMinor.fullName.trim()}).`;
+      }
+    }
+    if (attempted && form.guardian.name.trim().length < 2) {
+      return 'Guardian full name is required before booking a pass for a minor.';
+    }
+    return null;
+  })();
+
+  const guardianPhoneError = (() => {
+    if (!needsGuardian) return null;
+    const gPhoneTrimmed = form.guardian.phone.trim();
+
+    if (gPhoneTrimmed.length > 0 && !isValidPhone(gPhoneTrimmed)) {
+      return 'Valid guardian phone number (7–15 digits) is required before booking a pass for a minor.';
+    }
+    if (isValidPhone(gPhoneTrimmed)) {
+      const gKey = normalizePhoneKey(gPhoneTrimmed);
+      if (form.phone.trim().length > 0 && isValidPhone(form.phone) && normalizePhoneKey(form.phone) === gKey) {
+        return 'Guardian phone number cannot be the same as the minor’s own phone number.';
+      }
+      const otherMinorByPhone = existingAttendees.find((other) => {
+        if (other.clientId === form.clientId) return false;
+        const otherAge = parseIntegerAge(other.ageInput);
+        const isOtherMinor =
+          other.selectedCategory !== 'adult' ||
+          (isValidAgeInteger(otherAge) && requiresGuardian(otherAge));
+        return (
+          isOtherMinor &&
+          other.phone.trim().length > 0 &&
+          isValidPhone(other.phone) &&
+          normalizePhoneKey(other.phone) === gKey
+        );
+      });
+      if (otherMinorByPhone) {
+        return `Guardian phone belongs to a minor in this booking (${otherMinorByPhone.fullName.trim()}). Enter an adult guardian’s phone number.`;
+      }
+    }
+    if (attempted && !isValidPhone(gPhoneTrimmed)) {
+      return 'Valid guardian phone number (7–15 digits) is required before booking a pass for a minor.';
+    }
+    return null;
+  })();
 
   const daysError =
     attempted &&
     (form.passKind === 'day_pass' || form.passKind === 'free_infant') &&
     form.days.length === 0
-      ? 'Please select at least one festival day.'
+      ? 'Select at least one evening.'
       : null;
+
+  const firstSubmitIssue = attempted
+    ? (nameError ??
+      ageError ??
+      phoneError ??
+      emailError ??
+      guardianNameError ??
+      guardianPhoneError ??
+      daysError)
+    : null;
 
   const handleCategorySwitch = (nextCat: AttendeeCategoryChoice): void => {
     setForm((prev) => changeAttendeeCategory(prev, nextCat, []));
   };
 
+  const scrollFirstInvalidIntoView = (): void => {
+    window.requestAnimationFrame(() => {
+      const container = bodyRef.current;
+      if (!container) return;
+      const firstInvalid = container.querySelector<HTMLElement>('[aria-invalid="true"]');
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus({ preventScroll: true });
+      } else {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
+    e.stopPropagation();
     setAttempted(true);
 
     if (
       form.fullName.trim().length < 2 ||
       !validIntAge ||
       isCategoryMismatch ||
+      Boolean(duplicateAttendee) ||
       Boolean(phoneError) ||
       Boolean(emailError) ||
+      Boolean(guardianNameError) ||
+      Boolean(guardianPhoneError) ||
       (form.selectedCategory === 'adult' && !isValidPhone(form.phone)) ||
       (needsGuardian &&
         (form.guardian.name.trim().length < 2 || !isValidPhone(form.guardian.phone))) ||
       ((form.passKind === 'day_pass' || form.passKind === 'free_infant') &&
         form.days.length === 0)
     ) {
+      scrollFirstInvalidIntoView();
       return;
     }
 
@@ -172,59 +320,53 @@ export function AddAttendeeModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={initialAttendee ? 'Edit Attendee Pass' : 'Add Group Attendee'}
-      subtitle="Select attendee category and complete pass & safeguard details"
+      title={initialAttendee ? 'Edit attendee' : 'Add attendee'}
+      subtitle="Choose an age band and select the evenings they are attending"
       maxWidthClass="max-w-2xl"
-    >
-      <form onSubmit={handleSubmit} noValidate className="space-y-5">
-        {/* Step 1: Adult / Child / Under 5 selector + Age Rules right below */}
-        <div className="space-y-2.5">
-          <span className="block text-sm font-semibold text-[#FDF3E4]">
-            Is this attendee an Adult, Child, or Under 5?
-          </span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {(
-              [
-                { id: 'adult', title: 'Adult Pass', sub: 'Ages 12 & above · $15/day' },
-                { id: 'child', title: 'Child Pass', sub: 'Ages 5 to 11 · $8/day or $30 All-Day' },
-                { id: 'infant', title: 'Under 5 (Free)', sub: 'Ages 0 to 4 · Free Entry' },
-              ] as const
-            ).map((opt) => {
-              const active = form.selectedCategory === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => handleCategorySwitch(opt.id)}
-                  aria-pressed={active}
-                  className={`rounded-xl border p-3 text-left transition-colors cursor-pointer ${
-                    active
-                      ? 'border-[#C99B24] bg-[#C99B24]/20'
-                      : 'border-white/20 bg-white/[0.04] hover:border-white/40'
-                  }`}
-                >
-                  <span className="block text-sm font-bold text-white">{opt.title}</span>
-                  <span className="block text-xs text-white/70 mt-0.5">{opt.sub}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Age Rules Box displayed right below category selector */}
-          <div className="rounded-xl border border-white/15 bg-white/[0.04] px-3.5 py-2.5 text-xs text-white/75 space-y-1">
-            <p className="font-semibold text-[#D1AC3E]">Festival Age & Guardian Rules (as of 10 Dec 2026):</p>
-            <p>
-              • <strong>Under 5 (0–4):</strong> Free entry · Guardian details required. &nbsp;|&nbsp;{' '}
-              <strong>Ages 5–11:</strong> Child Pass · Guardian details required. &nbsp;|&nbsp;{' '}
-              <strong>Ages 12+:</strong> Adult Pass (ages 12–17 also require Guardian details).
-            </p>
+      bodyRef={bodyRef}
+      footer={
+        <div className="space-y-3">
+          {firstSubmitIssue && <FieldError message={firstSubmitIssue} />}
+          <div className="flex items-center justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" form={formId}>
+              {initialAttendee ? 'Save changes' : 'Add attendee'}
+            </Button>
           </div>
         </div>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit} noValidate className="space-y-6">
+        <div className="space-y-3">
+          <SegmentedControl
+            label="Attendee type"
+            options={ATTENDEE_CATEGORIES}
+            value={form.selectedCategory}
+            onChange={handleCategorySwitch}
+          />
 
-        {/* Attendee Details Fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Required UX: Age rules displayed right below the category selector */}
+          <dl className="grid gap-2 rounded-control border border-white/10 px-4 py-3 text-xs text-white/65 sm:grid-cols-3">
+            <div>
+              <dt className="font-semibold text-cream">Under 5 (0–4)</dt>
+              <dd>Free entry · guardian required</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-cream">Child (5–11)</dt>
+              <dd>Child pass · guardian required</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-cream">Adult (12+)</dt>
+              <dd>Adult pass · ages 12–17 need guardian</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
-            label="Attendee Full Name"
+            label="Full name"
             required
             placeholder="Arjun Patel"
             value={form.fullName}
@@ -234,15 +376,15 @@ export function AddAttendeeModal({
 
           <div>
             <TextField
-              label="Age (on 10 Dec 2026)"
+              label="Age (on 10 December 2026)"
               inputMode="numeric"
               required
               placeholder={
                 form.selectedCategory === 'adult'
-                  ? 'e.g. 32 or 15'
+                  ? '32 or 15'
                   : form.selectedCategory === 'child'
-                    ? 'e.g. 9'
-                    : 'e.g. 3'
+                    ? '9'
+                    : '3'
               }
               value={form.ageInput}
               onChange={(e) => setForm((p) => ({ ...p, ageInput: e.target.value }))}
@@ -252,7 +394,7 @@ export function AddAttendeeModal({
               <button
                 type="button"
                 onClick={() => handleCategorySwitch(classifyAge(parsedAge))}
-                className="mt-2 inline-flex items-center rounded-lg border border-[#C99B24] bg-[#C99B24]/20 px-3 py-1 text-xs font-semibold text-[#D1AC3E] hover:bg-[#C99B24]/30 cursor-pointer"
+                className="mt-2 cursor-pointer text-xs font-semibold text-bright-gold underline-offset-4 hover:underline"
               >
                 Switch attendee type to {formatCategoryLabel(classifyAge(parsedAge))}
               </button>
@@ -261,7 +403,7 @@ export function AddAttendeeModal({
 
           {form.selectedCategory !== 'infant' && (
             <TextField
-              label="Phone Number"
+              label="Phone number"
               type="tel"
               optionalLabel={form.selectedCategory === 'child' ? 'Optional' : undefined}
               required={form.selectedCategory === 'adult'}
@@ -274,7 +416,7 @@ export function AddAttendeeModal({
 
           {form.selectedCategory === 'adult' && (
             <TextField
-              label="Email Address"
+              label="Email address"
               type="email"
               optionalLabel="Optional"
               placeholder="guest@example.com"
@@ -285,15 +427,14 @@ export function AddAttendeeModal({
           )}
         </div>
 
-        {/* Graceful Guardian Reveal for <18 (Child 5-11, Under 5, AND 12-17 on Adult Pass!) */}
         {needsGuardian && (
           <GuardianFields
             attendeeAgeLabel={
               form.selectedCategory === 'adult'
-                ? `Age ${parsedAge} · Minor on Adult Pass`
+                ? `Age ${parsedAge} · minor on adult pass`
                 : form.selectedCategory === 'child'
-                  ? 'Child Pass (5–11)'
-                  : 'Under 5 Free Pass'
+                  ? 'Ages 5–11'
+                  : 'Under 5'
             }
             guardianName={form.guardian.name}
             guardianPhone={form.guardian.phone}
@@ -304,32 +445,26 @@ export function AddAttendeeModal({
           />
         )}
 
-        {/* Pass Type & Days */}
-        <PassDaySelector
-          category={form.selectedCategory}
-          passKind={form.passKind}
-          selectedDays={form.days}
-          onChangePassKind={(passKind) => setForm((p) => ({ ...p, passKind }))}
-          onChangeDays={(days) => setForm((p) => ({ ...p, days }))}
-          error={daysError}
-        />
+        <div className="border-t border-white/10 pt-5">
+          <PassDaySelector
+            category={form.selectedCategory}
+            passKind={form.passKind}
+            selectedDays={form.days}
+            onChangePassKind={(passKind) => setForm((p) => ({ ...p, passKind }))}
+            onChangeDays={(days) => setForm((p) => ({ ...p, days }))}
+            error={daysError}
+          />
+        </div>
 
-        {/* Extra Add-Ons */}
-        <ExtrasSelector
-          category={form.selectedCategory}
-          passKind={form.passKind}
-          selectedDays={form.days}
-          extras={form.extras}
-          onChangeExtras={(extras) => setForm((p) => ({ ...p, extras }))}
-        />
-
-        <div className="pt-3 border-t border-white/15 flex items-center justify-end gap-3">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary">
-            {initialAttendee ? 'Save Attendee Changes' : 'Add Attendee to Group'}
-          </Button>
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-white/90">Optional add-ons</h3>
+          <ExtrasSelector
+            category={form.selectedCategory}
+            passKind={form.passKind}
+            selectedDays={form.days}
+            extras={form.extras}
+            onChangeExtras={(extras) => setForm((p) => ({ ...p, extras }))}
+          />
         </div>
       </form>
     </Modal>

@@ -1,199 +1,214 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowRight,
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-  MapPin,
-  Sparkles,
-  Users,
-} from 'lucide-react';
+import { ArrowRight, ChevronDown } from 'lucide-react';
+import type { ProductDTO } from '@contract/index';
 import { cents, EVENT_METADATA, FESTIVAL_DAYS, formatUSD } from '@domain/index';
 import { useCatalogStore } from '../../stores/catalog-store';
-import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 
+interface PriceRow {
+  label: string;
+  note?: string;
+  price: string;
+  status?: { tone: 'sold-out' | 'low'; text: string } | null;
+}
+
+function PriceList({ rows }: { rows: readonly PriceRow[] }): React.ReactElement {
+  return (
+    <ul className="divide-y divide-white/10 border-y border-white/10 text-sm">
+      {rows.map((row) => (
+        <li key={row.label} className="flex items-baseline justify-between gap-4 py-2.5">
+          <span className="text-white/85">
+            {row.label}
+            {row.note && <span className="block text-xs text-white/50">{row.note}</span>}
+          </span>
+          {row.status?.tone === 'sold-out' ? (
+            <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-error-on-dark">
+              {row.status.text}
+            </span>
+          ) : (
+            <span className="tabular shrink-0 text-right text-white">
+              {row.price}
+              {row.status?.tone === 'low' && (
+                <span className="block text-xs text-warning-on-dark">{row.status.text}</span>
+              )}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
- * Fixed-height Hero Banner:
- * - Collapsed state has a strict fixed height (`h-[540px] sm:h-[580px]`).
- * - When content exceeds the fixed height, the upper details viewport truncates cleanly
- *   with a fade mask and reveals a dropdown toggle ("Show full festival details") to expand.
- * - The "Book Now" CTA button lives in a `shrink-0` footer bar OUTSIDE the truncated box,
- *   guaranteeing the CTA is NEVER truncated regardless of content length or viewport size.
+ * Festival banner.
+ * - Collapsed, the banner has a fixed height. Details that don't fit are clipped with a fade,
+ *   and a "Show full details" toggle expands the banner in place.
+ * - The Book now button sits in a footer bar outside the clipped area, so long content can
+ *   never push it out of view.
  */
 export function HeroBanner(): React.ReactElement {
   const navigate = useNavigate();
-  const { catalog } = useCatalogStore();
+  const catalog = useCatalogStore((s) => s.catalog);
   const [expanded, setExpanded] = useState(false);
-  const [isOverflowing, setIsOverflowing] = useState(true);
+  const [isOverflowing, setIsOverflowing] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = contentRef.current;
     if (!el || expanded) return;
-
-    const measure = (): void => {
-      setIsOverflowing(el.scrollHeight > el.clientHeight + 8);
-    };
+    const measure = (): void => setIsOverflowing(el.scrollHeight > el.clientHeight + 4);
     measure();
-
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, [expanded, catalog]);
 
-  const workshop = catalog?.products.find((p) => p.code === 'GARBA_WORKSHOP');
-  const adultAllDay = catalog?.products.find((p) => p.code === 'ALL_DAY_ADULT');
+  const product = (code: ProductDTO['code']): ProductDTO | undefined =>
+    catalog?.products.find((p) => p.code === code);
+  const priceOf = (code: ProductDTO['code'], fallbackCents: number): string =>
+    formatUSD(cents(product(code)?.unitPriceCents ?? fallbackCents));
+  const soldOut = (code: ProductDTO['code']): PriceRow['status'] =>
+    product(code)?.availability.status === 'sold_out' ? { tone: 'sold-out', text: 'Sold out' } : null;
+
+  const workshopLeft = product('GARBA_WORKSHOP')?.availability.remaining;
+  const workshopStatus: PriceRow['status'] =
+    workshopLeft === 0
+      ? { tone: 'sold-out', text: 'Sold out' }
+      : workshopLeft !== undefined && workshopLeft <= 5
+        ? { tone: 'low', text: `${workshopLeft} ${workshopLeft === 1 ? 'place' : 'places'} left` }
+        : null;
+
+  const ticketRows: PriceRow[] = [
+    { label: 'Day pass, adult (12+)', price: `${priceOf('DAY_PASS_ADULT', 1500)} / evening`, status: soldOut('DAY_PASS_ADULT') },
+    { label: 'Day pass, child (5–11)', price: `${priceOf('DAY_PASS_CHILD', 800)} / evening`, status: soldOut('DAY_PASS_CHILD') },
+    { label: 'All-day pass, adult', price: priceOf('ALL_DAY_ADULT', 6000), status: soldOut('ALL_DAY_ADULT') },
+    { label: 'All-day pass, child', price: priceOf('ALL_DAY_CHILD', 3000), status: soldOut('ALL_DAY_CHILD') },
+    { label: 'Family pass', note: '2 adults and 2 children, one evening', price: priceOf('FAMILY_PASS', 4000), status: soldOut('FAMILY_PASS') },
+    { label: 'Under 5', price: 'Free' },
+  ];
+
+  const extraRows: PriceRow[] = [
+    { label: 'Dinner plate', note: 'Per person, per evening', price: priceOf('DINNER_PLATE', 1200) },
+    { label: 'Garba workshop', note: 'Fri 11 and Sun 13 December', price: priceOf('GARBA_WORKSHOP', 2000), status: workshopStatus },
+    { label: 'Dandiya sticks', note: 'Per pair', price: priceOf('DANDIYA_PAIR', 500) },
+  ];
+
+  const facts = [
+    { label: 'When', value: '5 evenings, 5:00–10:30 pm' },
+    { label: 'Where', value: `${EVENT_METADATA.venue.replace(', Texas', '')}, TX` },
+    { label: 'Tickets from', value: `${priceOf('DAY_PASS_CHILD', 800)} an evening` },
+  ];
 
   return (
     <div
-      className={`relative flex flex-col rounded-3xl border border-[#BC9226]/70 bg-gradient-to-br from-[#352b18] via-[#2C2C2C] to-[#232323] p-5 sm:p-8 shadow-2xl transition-all duration-300 ${
-        expanded ? 'h-auto' : 'h-[540px] sm:h-[580px]'
+      className={`relative flex flex-col overflow-hidden rounded-card border border-gold/40 bg-primary-dark ${
+        expanded ? '' : 'h-[640px] sm:h-[580px]'
       }`}
     >
-      {/* Upper Festival Details Region (truncates cleanly when collapsed) */}
+      {/* Autumn full moon: Sharad Purnima is the night the festival celebrates. */}
       <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-28 -top-28 hidden h-96 w-96 rounded-full sm:block"
+        style={{
+          background:
+            'radial-gradient(circle at 42% 58%, rgb(253 243 228 / 0.11), rgb(253 243 228 / 0.035) 58%, transparent 70%)',
+        }}
+      />
+
+      <div
+        id="hero-details"
         ref={contentRef}
-        className={`relative min-h-0 flex-1 ${expanded ? 'overflow-visible' : 'overflow-hidden'}`}
+        className={`relative min-h-0 flex-1 px-6 pt-10 sm:px-12 sm:pt-14 ${
+          expanded ? 'pb-10' : 'overflow-hidden'
+        }`}
       >
-        <div className="space-y-5 pb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="gold">
-              <Sparkles className="h-3.5 w-3.5" /> Annual 5-Day Cultural & Bhakti Festival
-            </Badge>
-            {adultAllDay?.availability.status === 'sold_out' && (
-              <Badge variant="sold-out">Adult All-Day Pass: Sold Out</Badge>
-            )}
-            {workshop && workshop.availability.remaining > 0 && workshop.availability.remaining <= 5 && (
-              <Badge variant="low-stock">
-                Garba Workshop: Only {workshop.availability.remaining} spots left!
-              </Badge>
-            )}
-          </div>
+        <p className="text-sm tracking-wide text-bright-gold">
+          Thursday 10 – Monday 14 December 2026
+        </p>
+        <h1 className="mt-4 font-serif text-5xl leading-[1.05] text-cream sm:text-7xl">
+          Sharad Utsav
+        </h1>
+        <p className="mt-5 max-w-xl text-lg leading-relaxed text-white/80">
+          Five evenings of raas-garba, devotional music and shared dinners under the autumn moon,
+          at Radha Krishna Temple in Allen.
+        </p>
 
-          <div>
-            <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-[#FDF3E4]">
-              {EVENT_METADATA.name}
-            </h1>
-            <p className="mt-2 text-base sm:text-lg text-white/85 max-w-3xl leading-relaxed">
-              Five luminous evenings of traditional Raas-Garba, live devotional music, guided
-              choreography workshops, family cultural programs, and sattvic temple dining under
-              autumn skies.
-            </p>
-          </div>
-
-          {/* Key Event Facts */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-white/15 bg-white/[0.05] p-3.5">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#D1AC3E]">
-                <CalendarDays className="h-4 w-4" /> Festival Dates
-              </div>
-              <p className="mt-1 text-sm font-semibold text-white">
-                Thu 10 Dec → Mon 14 Dec 2026
-              </p>
-              <p className="text-xs text-white/65">5 Evenings · 5:00 PM – 10:30 PM CST</p>
+        <dl className="mt-8 grid max-w-3xl gap-px overflow-hidden rounded-control border border-white/10 bg-white/10 sm:grid-cols-3">
+          {facts.map((fact) => (
+            <div key={fact.label} className="bg-primary-dark px-4 py-3">
+              <dt className="text-xs text-white/50">{fact.label}</dt>
+              <dd className="mt-0.5 text-sm text-white">{fact.value}</dd>
             </div>
+          ))}
+        </dl>
 
-            <div className="rounded-xl border border-white/15 bg-white/[0.05] p-3.5">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#D1AC3E]">
-                <MapPin className="h-4 w-4" /> Temple Venue
-              </div>
-              <p className="mt-1 text-sm font-semibold text-white">{EVENT_METADATA.venue}</p>
-              <p className="text-xs text-white/65">{EVENT_METADATA.address}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/15 bg-white/[0.05] p-3.5">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#D1AC3E]">
-                <Users className="h-4 w-4" /> Family-Friendly Passes
-              </div>
-              <p className="mt-1 text-sm font-semibold text-white">
-                Adults {formatUSD(cents(1500))}/day · Kids {formatUSD(cents(800))}/day
-              </p>
-              <p className="text-xs text-white/65">
-                Toddlers under 5 enter Free · Family Pass {formatUSD(cents(4000))}
-              </p>
-            </div>
-          </div>
-
-          {/* Detailed 5-Day Schedule & Add-Ons (revealed in full via dropdown when truncated) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-            <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4 space-y-2.5">
-              <h2 className="font-display text-lg font-semibold text-[#FDF3E4]">
-                5-Day Evening Program Highlights
-              </h2>
-              <ul className="space-y-2 text-xs sm:text-sm text-white/80">
-                {FESTIVAL_DAYS.map((day) => (
-                  <li key={day.date} className="flex items-start gap-2">
-                    <span className="font-semibold text-[#D1AC3E] shrink-0 w-22">
-                      {day.shortLabel}:
+        <div className="mt-12 grid gap-10 md:grid-cols-[1.3fr_1fr] md:gap-14">
+          <section aria-labelledby="hero-programme">
+            <h2 id="hero-programme" className="font-serif text-2xl text-cream">
+              Programme
+            </h2>
+            <ol className="mt-4 divide-y divide-white/10 border-y border-white/10">
+              {FESTIVAL_DAYS.map((day) => {
+                const [weekday, dayNum] = day.shortLabel.split(' ');
+                return (
+                  <li key={day.date} className="grid grid-cols-[4.5rem_1fr] gap-4 py-3">
+                    <span className="font-serif text-lg leading-snug text-primary">
+                      {weekday} {dayNum}
                     </span>
-                    <span>{day.highlight}</span>
+                    <span className="text-sm leading-relaxed text-white/80">{day.highlight}</span>
                   </li>
-                ))}
-              </ul>
-            </div>
+                );
+              })}
+            </ol>
+          </section>
 
-            <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-4 space-y-2.5">
-              <h2 className="font-display text-lg font-semibold text-[#FDF3E4]">
-                Passes, Extras & Age Guidelines
-              </h2>
-              <ul className="space-y-1.5 text-xs sm:text-sm text-white/80">
-                <li>
-                  • <strong>Ages 12+:</strong> Adult Day Pass ($15/day) or Family Pass. Bookers must
-                  be 18+.
-                </li>
-                <li>
-                  • <strong>Ages 5–11:</strong> Child Day Pass ($8/day) or Child All-Day Pass ($30
-                  flat).
-                </li>
-                <li>
-                  • <strong>Under 5:</strong> Free entry pass (no ticket charge; registered for gate
-                  check-in).
-                </li>
-                <li>
-                  • <strong>Minor Safety:</strong> Guardian Name & Phone required for all attendees
-                  under 18 and printed on their boarding pass.
-                </li>
-                <li>
-                  • <strong>Festival Extras:</strong> Sattvic Dinner Plate ($12/person/day), Dandiya
-                  Sticks ($5/pair), and Master Garba Workshop ($20 — Fri 11 Dec & Sun 13 Dec only).
-                </li>
-              </ul>
+          <section aria-labelledby="hero-tickets">
+            <h2 id="hero-tickets" className="font-serif text-2xl text-cream">
+              Tickets
+            </h2>
+            <div className="mt-4">
+              <PriceList rows={ticketRows} />
             </div>
-          </div>
+            <h3 className="mt-8 text-sm font-medium text-white/90">Add-ons</h3>
+            <div className="mt-2">
+              <PriceList rows={extraRows} />
+            </div>
+          </section>
         </div>
 
-        {/* Bottom gradient fade mask when truncated */}
+        <p className="mt-10 max-w-2xl text-sm leading-relaxed text-white/60">
+          Ages are counted on 10 December. Bookings must be made by someone aged 18 or over, and
+          everyone under 18 needs a parent or guardian’s name and phone number on their pass.
+        </p>
+
         {!expanded && isOverflowing && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#282623] via-[#282623]/90 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-primary-dark via-primary-dark/85 to-transparent"
           />
         )}
       </div>
 
-      {/* Pinned CTA & Truncation Dropdown Footer — NEVER truncated */}
-      <div className="shrink-0 pt-4 mt-2 border-t border-[#BC9226]/35 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="primary" size="lg" onClick={() => navigate('/book')}>
-            <span>Book Now</span>
-            <ArrowRight className="h-5 w-5" />
-          </Button>
-          <span className="hidden md:inline text-xs text-white/65">
-            Instant boarding pass PDF & confirmation
-          </span>
-        </div>
+      <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-primary-dark px-6 py-4 sm:px-12">
+        <Button size="lg" onClick={() => navigate('/book')}>
+          Book now
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
 
         {(isOverflowing || expanded) && (
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
             aria-expanded={expanded}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-[#BC9226]/70 bg-white/[0.06] px-4 py-2 text-xs sm:text-sm font-medium text-[#D1AC3E] hover:bg-[#C99B24]/15 transition-colors cursor-pointer"
+            aria-controls="hero-details"
+            className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 text-sm font-medium text-bright-gold transition-colors hover:text-cream"
           >
-            <span>{expanded ? 'Show less details' : 'Show full banner details'}</span>
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {expanded ? 'Show less' : 'Show full details'}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
           </button>
         )}
       </div>

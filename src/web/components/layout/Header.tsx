@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  ChevronDown,
   HeartHandshake,
+  LogIn,
   LogOut,
-  Sparkles,
   Ticket,
   User,
-  UserCircle2,
+  UserRound,
+  type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { Button } from '../../ui/Button';
@@ -16,9 +16,9 @@ export type LandingSectionId = 'home' | 'about' | 'mission' | 'contribute';
 
 const NAV_ITEMS: readonly { id: LandingSectionId; label: string }[] = [
   { id: 'home', label: 'Home' },
-  { id: 'about', label: 'About Us' },
-  { id: 'mission', label: 'Our Mission' },
-  { id: 'contribute', label: 'Contribute to the Cause' },
+  { id: 'about', label: 'About us' },
+  { id: 'mission', label: 'Our mission' },
+  { id: 'contribute', label: 'Contribute to the cause' },
 ];
 
 export interface HeaderProps {
@@ -26,27 +26,54 @@ export interface HeaderProps {
   onSelectSection?: (id: LandingSectionId) => void;
 }
 
-export function Header({
-  activeSection = 'home',
-  onSelectSection,
-}: HeaderProps): React.ReactElement {
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+interface MenuItemProps {
+  icon: LucideIcon;
+  onClick: () => void;
+  tone?: 'default' | 'danger';
+  children: React.ReactNode;
+}
+
+function MenuItem({ icon: Icon, onClick, tone = 'default', children }: MenuItemProps): React.ReactElement {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/[0.05] ${
+        tone === 'danger' ? 'text-error-on-dark' : 'text-white/85 hover:text-white'
+      }`}
+    >
+      <Icon className="h-4 w-4 opacity-70" aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
+export function Header({ activeSection = 'home', onSelectSection }: HeaderProps): React.ReactElement {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, openSignInModal, loginDemo, logout } = useAuthStore();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const isLanding = location.pathname === '/';
 
   useEffect(() => {
-    if (!dropdownOpen) return;
+    if (!menuOpen) return;
     const handleOutside = (e: MouseEvent): void => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
     const handleEsc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setDropdownOpen(false);
+      if (e.key === 'Escape') setMenuOpen(false);
     };
     document.addEventListener('mousedown', handleOutside);
     document.addEventListener('keydown', handleEsc);
@@ -54,235 +81,176 @@ export function Header({
       document.removeEventListener('mousedown', handleOutside);
       document.removeEventListener('keydown', handleEsc);
     };
-  }, [dropdownOpen]);
+  }, [menuOpen]);
 
-  const handleNavClick = (sectionId: LandingSectionId): void => {
+  const goToSection = (sectionId: LandingSectionId): void => {
     if (isLanding) {
       onSelectSection?.(sectionId);
-      const el = document.getElementById(sectionId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
       navigate(`/#${sectionId}`);
     }
   };
 
-  const handleProtectedProfileRoute = async (targetPath: string): Promise<void> => {
-    setDropdownOpen(false);
+  const goToProfilePage = (path: string): void => {
+    setMenuOpen(false);
     if (user) {
-      navigate(targetPath);
+      navigate(path);
       return;
     }
-    // Sign in seamlessly with demo profile or let user sign in via modal
+    sessionStorage.setItem('su_post_login_redirect', path);
     openSignInModal();
-    sessionStorage.setItem('su_post_login_redirect', targetPath);
   };
 
   const handleSignOut = async (): Promise<void> => {
-    setDropdownOpen(false);
+    setMenuOpen(false);
     await logout();
-    if (location.pathname.startsWith('/me')) {
-      navigate('/');
-    }
+    if (location.pathname.startsWith('/me')) navigate('/');
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/15 bg-[#2C2C2C]/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        {/* Brand emblem */}
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-primary-dark/95 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
         <Link
           to="/"
-          onClick={() => isLanding && handleNavClick('home')}
-          className="flex items-center gap-2.5 group shrink-0"
+          onClick={() => isLanding && goToSection('home')}
+          className="shrink-0 font-serif text-xl text-white"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#BC9226] bg-[#C99B24]/15 text-[#D1AC3E] font-display text-lg font-bold">
-            ॐ
-          </span>
-          <div className="leading-tight">
-            <span className="block font-display text-base sm:text-lg font-bold text-white group-hover:text-[#D1AC3E] transition-colors">
-              Sharad Utsav 2026
-            </span>
-            <span className="hidden sm:block text-[11px] text-white/65">
-              Radha Krishna Temple · Allen, TX
-            </span>
-          </div>
+          Sharad Utsav <span className="text-primary">2026</span>
         </Link>
 
-        {/* Scroll-spy Single-Page Section Nav */}
-        <nav aria-label="Primary navigation" className="hidden lg:flex items-center gap-1">
+        <nav aria-label="Page sections" className="hidden h-full items-stretch lg:flex">
           {NAV_ITEMS.map((item) => {
             const isActive = isLanding && activeSection === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => handleNavClick(item.id)}
-                aria-current={isActive ? 'location' : undefined}
-                className={`relative px-3.5 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                  isActive
-                    ? 'text-[#D1AC3E] bg-[#C99B24]/15'
-                    : 'text-white/80 hover:text-white hover:bg-white/5'
+                onClick={() => goToSection(item.id)}
+                aria-current={isActive ? 'true' : undefined}
+                className={`relative cursor-pointer px-3.5 text-sm transition-colors ${
+                  isActive ? 'text-white' : 'text-white/60 hover:text-white'
                 }`}
               >
                 {item.label}
-                {isActive && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-3 bottom-0.5 h-0.5 rounded-full bg-[#C99B24]"
-                  />
-                )}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-x-3.5 bottom-0 h-0.5 bg-primary transition-opacity ${
+                    isActive ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
               </button>
             );
           })}
         </nav>
 
-        {/* Right CTA + Profile Icon Dropdown */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           {location.pathname !== '/book' && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate('/book')}
-              className="hidden sm:inline-flex"
-            >
-              Book Now
+            <Button size="sm" onClick={() => navigate('/book')} className="hidden sm:inline-flex">
+              Book tickets
             </Button>
           )}
 
           <div className="relative" ref={menuRef}>
             <button
               type="button"
-              onClick={() => setDropdownOpen((o) => !o)}
+              onClick={() => setMenuOpen((open) => !open)}
               aria-haspopup="menu"
-              aria-expanded={dropdownOpen}
-              aria-label="Profile menu"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-3 py-2 text-sm font-medium text-white hover:border-[#D1AC3E] hover:bg-white/10 transition-colors cursor-pointer"
+              aria-expanded={menuOpen}
+              aria-label={user ? `Account menu for ${user.fullName}` : 'Account menu'}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/25 text-xs font-semibold text-white transition-colors hover:border-bright-gold"
             >
-              <UserCircle2 className="h-5 w-5 text-[#D1AC3E]" />
-              <span className="hidden md:inline max-w-28 truncate">
-                {user ? user.fullName.split(' ')[0] : 'Profile'}
-              </span>
-              <ChevronDown
-                className={`h-4 w-4 text-white/70 transition-transform ${
-                  dropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
+              {user ? initialsOf(user.fullName) : <UserRound className="h-4 w-4" aria-hidden="true" />}
             </button>
 
-            {dropdownOpen && (
+            {menuOpen && (
               <div
                 role="menu"
-                aria-label="Profile options"
-                className="absolute right-0 mt-2 w-64 rounded-2xl border border-[#BC9226]/70 bg-[#323232] p-2 text-white shadow-2xl z-50"
+                aria-label="Account"
+                className="absolute right-0 mt-2 w-64 overflow-hidden rounded-control border border-white/15 bg-primary-dark shadow-xl shadow-black/40"
               >
-                {user ? (
-                  <div className="px-3 py-2.5 mb-1 border-b border-white/15">
-                    <p className="text-sm font-semibold text-white truncate">{user.fullName}</p>
-                    <p className="text-xs text-white/65 truncate">{user.email}</p>
-                  </div>
-                ) : (
-                  <div className="px-3 py-2.5 mb-1 border-b border-white/15 space-y-2">
-                    <p className="text-xs text-white/70">
-                      Browsing as Guest (no login required to book)
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        void loginDemo();
-                      }}
-                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#C99B24]/20 border border-[#BC9226] px-2.5 py-1.5 text-xs font-semibold text-[#D1AC3E] hover:bg-[#C99B24]/30 cursor-pointer"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      1-Click Demo Sign In
-                    </button>
-                  </div>
-                )}
+                <div className="border-b border-white/10 px-4 py-3">
+                  {user ? (
+                    <>
+                      <p className="truncate text-sm font-medium text-white">{user.fullName}</p>
+                      <p className="truncate text-xs text-white/55">{user.email}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-white">Browsing as a guest</p>
+                      <p className="mt-0.5 text-xs text-white/55">You don’t need an account to book.</p>
+                    </>
+                  )}
+                </div>
 
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleProtectedProfileRoute('/me/details')}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  <User className="h-4 w-4 text-[#D1AC3E]" />
-                  <span>My Details</span>
-                </button>
+                <div className="py-1">
+                  <MenuItem icon={User} onClick={() => goToProfilePage('/me/details')}>
+                    My details
+                  </MenuItem>
+                  <MenuItem icon={HeartHandshake} onClick={() => goToProfilePage('/me/contributions')}>
+                    My contributions
+                  </MenuItem>
+                  <MenuItem icon={Ticket} onClick={() => goToProfilePage('/me/bookings')}>
+                    My bookings
+                  </MenuItem>
+                </div>
 
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleProtectedProfileRoute('/me/contributions')}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  <HeartHandshake className="h-4 w-4 text-[#D1AC3E]" />
-                  <span>My Contributions</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => void handleProtectedProfileRoute('/me/bookings')}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-white/90 hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  <Ticket className="h-4 w-4 text-[#D1AC3E]" />
-                  <span>My Bookings</span>
-                </button>
-
-                <div className="my-1 border-t border-white/15" />
-
-                {user ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => void handleSignOut()}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-[#FF7A7A] hover:bg-[#EF1F1F]/15 transition-colors cursor-pointer"
-                  >
-                    <LogOut className="h-4 w-4 text-[#EF1F1F]" />
-                    <span>Sign Out</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setDropdownOpen(false);
-                      openSignInModal();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-[#D1AC3E] hover:bg-white/10 transition-colors cursor-pointer"
-                  >
-                    <UserCircle2 className="h-4 w-4" />
-                    <span>Sign In with Email</span>
-                  </button>
-                )}
+                <div className="border-t border-white/10 py-1">
+                  {user ? (
+                    <MenuItem icon={LogOut} tone="danger" onClick={() => void handleSignOut()}>
+                      Sign out
+                    </MenuItem>
+                  ) : (
+                    <>
+                      <MenuItem
+                        icon={LogIn}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          openSignInModal();
+                        }}
+                      >
+                        Sign in with email
+                      </MenuItem>
+                      <MenuItem
+                        icon={UserRound}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void loginDemo();
+                        }}
+                      >
+                        Use demo account
+                      </MenuItem>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Mobile horizontal scroll-spy section bar */}
       {isLanding && (
-        <div className="flex lg:hidden items-center gap-1 overflow-x-auto px-4 py-2 border-t border-white/10 bg-[#262626]">
+        <nav
+          aria-label="Page sections"
+          className="flex gap-5 overflow-x-auto border-t border-white/10 px-4 lg:hidden"
+        >
           {NAV_ITEMS.map((item) => {
             const isActive = activeSection === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => handleNavClick(item.id)}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-[#C99B24] text-[#2C2C2C] font-semibold'
-                    : 'text-white/75 hover:text-white'
+                onClick={() => goToSection(item.id)}
+                aria-current={isActive ? 'true' : undefined}
+                className={`shrink-0 cursor-pointer border-b-2 py-2.5 text-sm transition-colors ${
+                  isActive ? 'border-primary text-white' : 'border-transparent text-white/60'
                 }`}
               >
                 {item.label}
               </button>
             );
           })}
-        </div>
+        </nav>
       )}
     </header>
   );

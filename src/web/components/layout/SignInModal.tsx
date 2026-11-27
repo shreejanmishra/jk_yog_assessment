@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { KeyRound, Sparkles } from 'lucide-react';
 import { ApiClientError } from '../../api/http';
 import { useAuthStore } from '../../stores/auth-store';
 import { Button } from '../../ui/Button';
@@ -11,14 +10,8 @@ export interface SignInModalProps {
 }
 
 export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElement {
-  const {
-    signInModalOpen,
-    closeSignInModal,
-    loginDemo,
-    sendOtp,
-    confirmOtp,
-    loading,
-  } = useAuthStore();
+  const { signInModalOpen, closeSignInModal, loginDemo, sendOtp, confirmOtp, loading } =
+    useAuthStore();
 
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -43,7 +36,7 @@ export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElemen
       await loginDemo();
       onSignedIn?.();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Unable to sign in to demo profile.');
+      setError(err instanceof ApiClientError ? err.message : 'Couldn’t sign in to the demo account.');
     }
   };
 
@@ -52,11 +45,7 @@ export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElemen
     setError(null);
     setSendingOtp(true);
     try {
-      const code = await sendOtp(
-        email.trim(),
-        fullName.trim() || undefined,
-        phone.trim() || undefined,
-      );
+      const code = await sendOtp(email.trim(), fullName.trim() || undefined, phone.trim() || undefined);
       setSimulatedOtp(code);
       setCodeInput(code);
       setOtpSent(true);
@@ -71,16 +60,11 @@ export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElemen
     e.preventDefault();
     setError(null);
     try {
-      await confirmOtp(
-        email.trim(),
-        codeInput.trim(),
-        fullName.trim() || undefined,
-        phone.trim() || undefined,
-      );
+      await confirmOtp(email.trim(), codeInput.trim(), fullName.trim() || undefined, phone.trim() || undefined);
       resetAndClose();
       onSignedIn?.();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Invalid verification code.');
+      setError(err instanceof ApiClientError ? err.message : 'That code didn’t work.');
     }
   };
 
@@ -88,44 +72,17 @@ export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElemen
     <Modal
       open={signInModalOpen}
       onClose={resetAndClose}
-      title="Profile Sign In"
-      subtitle="Optional — view My Details, My Contributions, and past Bookings linked to your email"
+      title="Sign in"
+      subtitle="Optional. See your details, contributions and past bookings."
       maxWidthClass="max-w-md"
     >
-      <div className="space-y-5">
-        <div className="rounded-xl border border-[#BC9226]/60 bg-[#C99B24]/10 p-4 space-y-2.5">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#D1AC3E]">
-            <Sparkles className="h-4 w-4 shrink-0" />
-            <span>Instant Evaluator Demo Profile</span>
-          </div>
-          <p className="text-xs text-white/80">
-            Sign in immediately as <strong>Shreejan Mishra</strong> with pre-seeded temple seva
-            contributions and profile details.
-          </p>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={loading}
-            onClick={() => void handleDemoSignIn()}
-            className="w-full"
-          >
-            1-Click Demo Sign In
-          </Button>
-        </div>
-
-        <div className="relative flex items-center py-1">
-          <div className="grow border-t border-white/15" />
-          <span className="mx-3 text-xs uppercase tracking-wider text-white/50">
-            or sign in with your email
-          </span>
-          <div className="grow border-t border-white/15" />
-        </div>
-
+      <div className="space-y-6">
         {!otpSent ? (
-          <form onSubmit={(e) => void handleRequestOtp(e)} className="space-y-3.5">
+          <form onSubmit={(e) => void handleRequestOtp(e)} className="space-y-4">
             <TextField
-              label="Email Address"
+              label="Email address"
               type="email"
+              autoComplete="email"
               required
               placeholder="you@example.com"
               value={email}
@@ -133,56 +90,68 @@ export function SignInModal({ onSignedIn }: SignInModalProps): React.ReactElemen
               error={error}
             />
             <TextField
-              label="Full Name"
+              label="Full name"
               optionalLabel="Optional"
-              placeholder="Asha Patel"
+              autoComplete="name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
             <TextField
-              label="Phone Number"
+              label="Phone number"
               optionalLabel="Optional"
-              placeholder="+1 469-555-0140"
+              type="tel"
+              autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
-            <Button type="submit" variant="secondary" loading={sendingOtp} className="w-full">
-              <KeyRound className="h-4 w-4" />
-              Send Simulated Login Code
+            <Button type="submit" loading={sendingOtp} className="w-full">
+              Email me a sign-in code
             </Button>
+            <p className="text-xs leading-relaxed text-white/50">
+              Bookings made with this email address will appear in your account.
+            </p>
           </form>
         ) : (
-          <form onSubmit={(e) => void handleVerifyOtp(e)} className="space-y-3.5">
+          <form onSubmit={(e) => void handleVerifyOtp(e)} className="space-y-4">
             {simulatedOtp && (
-              <div className="rounded-lg border border-[#28A736]/60 bg-[#28A736]/15 px-3.5 py-2.5 text-xs text-[#4CC75A]">
-                Simulated Email Inbox — Your 6-digit code is:{' '}
-                <strong className="font-mono text-sm">{simulatedOtp}</strong> (auto-filled below)
+              <div className="rounded-control border border-white/15 px-4 py-3 text-sm text-white/75">
+                Email delivery is simulated in this demo. Your code is{' '}
+                <span className="tabular font-mono font-semibold text-white">{simulatedOtp}</span>,
+                and we’ve filled it in for you.
               </div>
             )}
             <TextField
-              label="6-Digit Verification Code"
+              label="6-digit code"
               inputMode="numeric"
+              autoComplete="one-time-code"
               maxLength={6}
               required
               value={codeInput}
               onChange={(e) => setCodeInput(e.target.value)}
               error={error}
             />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setOtpSent(false)}
-                className="flex-1"
-              >
+            <div className="flex gap-3">
+              <Button type="button" variant="ghost" onClick={() => setOtpSent(false)} className="flex-1">
                 Back
               </Button>
-              <Button type="submit" variant="primary" loading={loading} className="flex-1">
-                Verify & Sign In
+              <Button type="submit" loading={loading} className="flex-1">
+                Sign in
               </Button>
             </div>
           </form>
         )}
+
+        <div className="border-t border-white/10 pt-5">
+          <p className="text-sm text-white/70">Reviewing the project?</p>
+          <Button
+            variant="secondary"
+            loading={loading && !otpSent}
+            onClick={() => void handleDemoSignIn()}
+            className="mt-3 w-full"
+          >
+            Use the demo account
+          </Button>
+        </div>
       </div>
     </Modal>
   );

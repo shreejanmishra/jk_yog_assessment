@@ -1,5 +1,4 @@
 import React from 'react';
-import { ShieldAlert } from 'lucide-react';
 import { TextField } from '../../../ui/TextField';
 
 export interface GuardianFieldsProps {
@@ -22,12 +21,21 @@ export function GuardianFields({
   phoneError,
 }: GuardianFieldsProps): React.ReactElement {
   return (
-    <div className="rounded-xl border border-[#C99B24]/70 bg-[#C99B24]/10 p-4 space-y-3.5 transition-all duration-200">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-[#FDF3E4]">
-          <ShieldAlert className="h-4 w-4 text-[#D1AC3E] shrink-0" />
-          <span>Mandatory Guardian Details ({attendeeAgeLabel})</span>
+    <div className="reveal space-y-4 rounded-card border border-gold/50 bg-white/[0.02] p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h4 className="font-serif text-lg text-cream">
+            Parent or guardian details{' '}
+            <span className="font-sans text-xs font-normal text-bright-gold">
+              · {attendeeAgeLabel}
+            </span>
+          </h4>
+          <p className="mt-1 text-xs leading-relaxed text-white/60">
+            Required for everyone under 18. Both details are printed on this attendee’s boarding
+            pass for gate check-in.
+          </p>
         </div>
+
         {bookerQuickFill && bookerQuickFill.name.trim() && bookerQuickFill.phone.trim() && (
           <button
             type="button"
@@ -37,29 +45,24 @@ export function GuardianFields({
                 phone: bookerQuickFill.phone,
               })
             }
-            className="rounded-lg border border-[#BC9226] bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-[#D1AC3E] hover:bg-[#C99B24]/20 cursor-pointer"
+            className="cursor-pointer text-xs font-medium text-bright-gold underline-offset-4 hover:underline"
           >
-            Same as Primary Booker
+            Use lead booker details
           </button>
         )}
       </div>
 
-      <p className="text-xs text-white/75">
-        Passes for anyone under 18 cannot be booked without a guardian’s name and phone number. Both
-        details will be printed on this attendee’s boarding pass for gate check-in.
-      </p>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <TextField
-          label="Guardian Full Name"
+          label="Guardian full name"
           required
-          placeholder="e.g. Ramesh Sharma"
+          placeholder="Ramesh Sharma"
           value={guardianName}
           onChange={(e) => onChange({ name: e.target.value, phone: guardianPhone })}
           error={nameError}
         />
         <TextField
-          label="Guardian Phone Number"
+          label="Guardian phone number"
           type="tel"
           required
           placeholder="+1 469-555-0192"

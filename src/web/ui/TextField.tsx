@@ -7,20 +7,18 @@ export interface FieldErrorProps {
   surface?: 'dark' | 'light';
 }
 
+/** Inline validation message with a red exclamation icon, shown directly below a field. */
 export function FieldError({
   id,
   message,
   surface = 'dark',
 }: FieldErrorProps): React.ReactElement | null {
   if (!message) return null;
-  const textColor = surface === 'light' ? 'text-[#C41818]' : 'text-[#FF7A7A]';
+  const textColor = surface === 'light' ? 'text-error-on-light' : 'text-error-on-dark';
 
   return (
-    <p id={id} role="alert" className={`mt-1.5 flex items-start gap-1.5 text-xs sm:text-sm font-medium ${textColor}`}>
-      <AlertCircle
-        className="h-4 w-4 shrink-0 text-[#EF1F1F] mt-0.5"
-        aria-label="Validation error"
-      />
+    <p id={id} role="alert" className={`mt-2 flex items-start gap-1.5 text-sm ${textColor}`}>
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
       <span>{message}</span>
     </p>
   );
@@ -49,33 +47,31 @@ export function TextField({
   const errorId = `${inputId}-error`;
   const hintId = `${inputId}-hint`;
 
-  const labelColor = surface === 'light' ? 'text-[#291900]' : 'text-white';
-  const hintColor = surface === 'light' ? 'text-[#645743]' : 'text-white/65';
-  const baseInput =
-    surface === 'light'
-      ? 'bg-white text-[#291900] placeholder:text-[#645743]/60 border-[#BC9226]/50 focus:border-[#291900]'
-      : 'bg-white/[0.06] text-white placeholder:text-white/40 border-white/25 focus:border-[#D1AC3E]';
-  const errorBorder = error ? 'border-[#EF1F1F] focus:border-[#EF1F1F]' : '';
+  const isLight = surface === 'light';
+  const labelColor = isLight ? 'text-heading' : 'text-white/90';
+  const mutedColor = isLight ? 'text-primary-text' : 'text-white/50';
+  const inputColors = isLight
+    ? 'border-primary-text/35 bg-white text-heading placeholder:text-primary-text/55 hover:border-primary-text/60'
+    : 'border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 hover:border-white/35';
+  const errorBorder = error ? 'border-error hover:border-error' : '';
 
   return (
     <div className="w-full">
-      <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <label htmlFor={inputId} className={`text-sm font-medium ${labelColor}`}>
-          {label}
-        </label>
+      <label htmlFor={inputId} className={`mb-1.5 block text-sm font-medium ${labelColor}`}>
+        {label}
         {optionalLabel && (
-          <span className={`text-xs ${hintColor}`}>{optionalLabel}</span>
+          <span className={`ml-2 text-xs font-normal ${mutedColor}`}>{optionalLabel}</span>
         )}
-      </div>
+      </label>
       <input
         id={inputId}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : hint ? hintId : undefined}
-        className={`w-full min-h-11 rounded-[10px] border px-3.5 py-2.5 text-base transition-colors ${baseInput} ${errorBorder} ${className}`}
+        className={`block h-11 w-full rounded-control border px-3.5 text-[15px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${inputColors} ${errorBorder} ${className}`}
         {...rest}
       />
       {hint && !error && (
-        <p id={hintId} className={`mt-1 text-xs ${hintColor}`}>
+        <p id={hintId} className={`mt-1.5 text-xs ${mutedColor}`}>
           {hint}
         </p>
       )}

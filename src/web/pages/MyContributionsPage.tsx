@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, HeartHandshake } from 'lucide-react';
 import type { ContributionCardDTO } from '@contract/index';
 import { cents, formatUSD } from '@domain/index';
 import { fetchMyContributions } from '../api/endpoints';
@@ -24,64 +23,59 @@ export function MyContributionsPage(): React.ReactElement {
   }, [user]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#2C2C2C] text-white">
+    <div className="flex min-h-screen flex-col bg-primary-dark text-white">
       <Header />
-      <main className="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 pt-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <HeartHandshake className="h-7 w-7 text-[#D1AC3E]" />
-          <div>
-            <h1 className="font-display text-3xl font-bold text-[#FDF3E4]">My Contributions</h1>
-            <p className="text-sm text-white/70">
-              Events, charities, and community seva initiatives you have supported
-            </p>
-          </div>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 sm:px-6 sm:pt-14">
+        <div className="border-b border-white/10 pb-6">
+          <p className="text-xs uppercase tracking-wider text-bright-gold">Account</p>
+          <h1 className="mt-1 font-serif text-4xl text-cream">My contributions</h1>
+          <p className="mt-2 text-sm text-white/65">
+            Events, charities and community seva initiatives you have supported.
+          </p>
         </div>
 
         {!user ? (
-          <Card className="p-6 space-y-4">
-            <p className="text-sm text-white/80">
-              Sign in to view your charity, seva, and event contribution history.
+          <div className="mt-8 space-y-4 rounded-card border border-white/15 p-6">
+            <p className="text-sm text-white/75">
+              Sign in to view your charity, seva and event contribution history.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="primary" onClick={() => void loginDemo()}>
-                1-Click Demo Sign In
-              </Button>
+              <Button onClick={() => void loginDemo()}>Try demo account</Button>
               <Button variant="secondary" onClick={openSignInModal}>
-                Sign In with Email
+                Sign in with email
               </Button>
             </div>
-          </Card>
+          </div>
         ) : loading ? (
-          <p className="text-sm text-white/70 py-8">Loading contribution records…</p>
+          <p className="py-10 text-sm text-white/60">Loading contributions…</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
-              <Card key={item.id} className="p-6 flex flex-col justify-between space-y-4">
+              <Card
+                key={item.id}
+                surface="outline"
+                className="flex flex-col justify-between space-y-5 p-6"
+              >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="gold" className="uppercase">
-                      {item.category}
-                    </Badge>
+                    <Badge variant="gold">{item.category}</Badge>
                     <Badge variant="success">{item.impactBadge}</Badge>
                   </div>
 
                   <div>
-                    <h2 className="font-display text-xl font-bold text-[#FDF3E4]">{item.title}</h2>
-                    <p className="text-xs text-[#D1AC3E] mt-0.5">{item.organization}</p>
+                    <h2 className="font-serif text-xl text-cream">{item.title}</h2>
+                    <p className="mt-0.5 text-xs text-bright-gold">{item.organization}</p>
                   </div>
 
-                  <p className="text-sm text-white/80 leading-relaxed">{item.summary}</p>
+                  <p className="text-sm leading-relaxed text-white/70">{item.summary}</p>
                 </div>
 
-                <div className="pt-3 border-t border-white/15 flex items-center justify-between text-xs text-white/70">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-[#D1AC3E]" />
-                    {item.contributedOn}
-                  </span>
-                  <span className="font-semibold text-white text-sm">
+                <div className="flex items-baseline justify-between border-t border-white/10 pt-3.5 text-xs text-white/55">
+                  <span>{item.contributedOn}</span>
+                  <span className="tabular text-sm font-semibold text-cream">
                     {item.amountCents !== null
                       ? formatUSD(cents(item.amountCents))
-                      : 'Volunteer Service'}
+                      : 'Volunteer service'}
                   </span>
                 </div>
               </Card>

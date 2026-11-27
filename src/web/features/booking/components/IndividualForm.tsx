@@ -6,8 +6,8 @@ import {
   isValidPhone,
 } from '@domain/index';
 import { Button } from '../../../ui/Button';
-import { Card } from '../../../ui/Card';
-import { TextField } from '../../../ui/TextField';
+import { FormSection } from '../../../ui/FormSection';
+import { FieldError, TextField } from '../../../ui/TextField';
 import { useBookingStore } from '../store/booking-store';
 import { parseIntegerAge } from '../store/transitions';
 import { ExtrasSelector } from './ExtrasSelector';
@@ -15,6 +15,7 @@ import { PassDaySelector } from './PassDaySelector';
 
 export function IndividualForm(): React.ReactElement {
   const draft = useBookingStore((s) => s.draft);
+  const quoteState = useBookingStore((s) => s.quoteState);
   const patchBooker = useBookingStore((s) => s.patchBooker);
   const updateAttendee = useBookingStore((s) => s.updateAttendee);
   const openCheckoutModal = useBookingStore((s) => s.openCheckoutModal);
@@ -30,9 +31,9 @@ export function IndividualForm(): React.ReactElement {
     if (!hasAgeTyped) {
       ageError = 'Please enter your age.';
     } else if (!isValidAgeInteger(parsedAge)) {
-      ageError = 'Please enter a valid whole-number age between 0 and 120.';
+      ageError = 'Please enter a whole-number age between 0 and 120.';
     } else if (!isLegalAdultBooker(parsedAge)) {
-      ageError = `Booker is less than 18 (entered ${parsedAge}). You must be 18 or older to book tickets.`;
+      ageError = `Booker is less than 18 (entered ${parsedAge}). Tickets must be booked by someone aged 18 or older.`;
     }
   }
 
@@ -52,10 +53,14 @@ export function IndividualForm(): React.ReactElement {
     attemptedSubmit &&
     selfAttendee.passKind === 'day_pass' &&
     selfAttendee.days.length === 0
-      ? 'Select at least one festival day.'
+      ? 'Select at least one evening.'
       : null;
 
   const isUnder18Blocked = hasAgeTyped && isValidAgeInteger(parsedAge) && parsedAge < 18;
+  const stockIssues =
+    quoteState.status === 'invalid'
+      ? quoteState.issues.filter((iss) => iss.path.startsWith('stock.') || iss.path.includes('extras'))
+      : [];
 
   const handleConfirm = (e: React.FormEvent): void => {
     e.preventDefault();
@@ -66,7 +71,8 @@ export function IndividualForm(): React.ReactElement {
       !isValidPhone(draft.booker.phone) ||
       !isValidEmail(draft.booker.email) ||
       !isLegalAdultBooker(parsedAge) ||
-      (selfAttendee.passKind === 'day_pass' && selfAttendee.days.length === 0)
+      (selfAttendee.passKind === 'day_pass' && selfAttendee.days.length === 0) ||
+      stockIssues.length > 0
     ) {
       return;
     }
@@ -75,20 +81,15 @@ export function IndividualForm(): React.ReactElement {
   };
 
   return (
-    <Card className="p-5 sm:p-8">
-      <form onSubmit={handleConfirm} noValidate className="space-y-6">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-[#FDF3E4]">
-            Individual Booker Details
-          </h2>
-          <p className="mt-1 text-sm text-white/70">
-            Booker must be 18 or older. Ages 12+ receive an Adult Festival Pass.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <form onSubmit={handleConfirm} noValidate className="space-y-10">
+      <FormSection
+        step="1"
+        title="Your details"
+        description="You must be 18 or older to book. Your pass and receipt will be sent to this email address."
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField
-            label="Full Name"
+            label="Full name"
             required
             placeholder="Asha Patel"
             value={draft.booker.fullName}
@@ -96,7 +97,7 @@ export function IndividualForm(): React.ReactElement {
             error={nameError}
           />
           <TextField
-            label="Phone Number"
+            label="Phone number"
             type="tel"
             required
             placeholder="+1 469-555-0140"
@@ -105,7 +106,7 @@ export function IndividualForm(): React.ReactElement {
             error={phoneError}
           />
           <TextField
-            label="Email Address"
+            label="Email address"
             type="email"
             required
             placeholder="asha@example.com"
@@ -114,17 +115,23 @@ export function IndividualForm(): React.ReactElement {
             error={emailError}
           />
           <TextField
-            label="Age (as of 10 Dec 2026)"
+            label="Age (on 10 December 2026)"
             inputMode="numeric"
             required
-            placeholder="e.g. 28"
+            placeholder="28"
             value={draft.booker.ageInput}
             onChange={(e) => patchBooker({ ageInput: e.target.value })}
-            hint="Booker must be 18 or older"
+            hint="Bookers must be aged 18 or over"
             error={ageError}
           />
         </div>
+      </FormSection>
 
+      <FormSection
+        step="2"
+        title="Pass and evenings"
+        description="Ages 12 and over are issued an adult festival pass."
+      >
         <PassDaySelector
           category="adult"
           passKind={selfAttendee.passKind}
@@ -137,7 +144,13 @@ export function IndividualForm(): React.ReactElement {
           }
           error={daysError}
         />
+      </FormSection>
 
+      <FormSection
+        step="3"
+        title="Add-ons"
+        description="Optional meals, workshops and dandiya sticks printed on your pass."
+      >
         <ExtrasSelector
           category="adult"
           passKind={selfAttendee.passKind}
@@ -147,16 +160,24 @@ export function IndividualForm(): React.ReactElement {
             updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, extras }))
           }
         />
+      </FormSection>
 
-        <div className="pt-4 border-t border-white/15 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-xs text-white/65">
-            Final amount and coupon discounts are verified on the server in the next step.
-          </p>
-          <Button type="submit" variant="primary" size="lg" disabled={isUnder18Blocked}>
-            Confirm & Review Pass
-          </Button>
+      {stockIssues.length > 0 && (
+        <div className="space-y-1 rounded-card border border-error/70 bg-error/[0.06] px-5 py-4">
+          {stockIssues.map((iss, idx) => (
+            <FieldError key={`${iss.code}-${idx}`} message={iss.message} />
+          ))}
         </div>
-      </form>
-    </Card>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
+        <p className="text-xs text-white/55">
+          You can enter a coupon code and choose your payment method in the next step.
+        </p>
+        <Button type="submit" size="lg" disabled={isUnder18Blocked}>
+          Confirm and review pass
+        </Button>
+      </div>
+    </form>
   );
 }

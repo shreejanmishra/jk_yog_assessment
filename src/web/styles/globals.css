@@ -37,6 +37,13 @@
     font-family: var(--font-sans);
     background-color: var(--color-primary-dark);
     color: var(--color-white);
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    line-height: 1.6;
   }
 
   h1,
@@ -44,18 +51,49 @@
   h3,
   .font-display {
     font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   :focus-visible {
     outline: 2px solid var(--color-bright-gold);
     outline-offset: 2px;
   }
+
+  ::selection {
+    background-color: var(--color-primary);
+    color: var(--color-primary-dark);
+  }
 }
 
-/* Boarding pass decorative notch utility */
-.ticket-perforation {
-  background-image: linear-gradient(to bottom, #BC9226 50%, transparent 50%);
-  background-position: left;
-  background-size: 2px 12px;
-  background-repeat: repeat-y;
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility reveal {
+  animation: reveal 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

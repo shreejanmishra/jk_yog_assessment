@@ -49,51 +49,51 @@ export function PassDaySelector({
 
   if (passKind === 'family_pass') {
     return (
-      <div className="rounded-xl border border-[#C99B24] bg-[#C99B24]/15 p-3.5 text-sm">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-semibold text-[#FDF3E4]">Included in Family Pass ($40/day)</span>
-          <Badge variant="gold">Family Group</Badge>
+      <div className="rounded-control border border-gold/50 px-4 py-3.5 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-medium text-cream">Included in $40.00 Family Pass</span>
+          <Badge variant="gold">Family pass</Badge>
         </div>
-        <p className="mt-1 text-xs text-white/75">
-          Valid on: {selectedDays.join(', ')}. You can switch back to individual passes anytime from
-          the Family Pass banner.
+        <p className="mt-1 text-xs text-white/60">
+          Valid on {selectedDays.join(', ')}. You can switch back to individual passes from the
+          family pass bar above.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {category !== 'infant' ? (
-        <div className="space-y-2">
-          <span className="block text-sm font-medium text-white">Entry Pass Type</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Day Pass Option */}
+        <div>
+          <span className="mb-2 block text-sm font-medium text-white/90">Pass type</span>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => onChangePassKind('day_pass')}
               aria-pressed={passKind === 'day_pass'}
-              className={`text-left rounded-xl border p-3.5 transition-colors cursor-pointer ${
+              className={`cursor-pointer rounded-control border p-4 text-left transition-colors ${
                 passKind === 'day_pass'
-                  ? 'border-[#C99B24] bg-[#C99B24]/15'
-                  : 'border-white/20 bg-white/[0.04] hover:border-white/40'
+                  ? 'border-primary bg-primary/10'
+                  : 'border-white/15 hover:border-white/35'
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-sm text-white">
-                  {dayPassProduct?.name ?? 'Day Pass'}
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-semibold text-white">
+                  {dayPassProduct?.name ?? 'Day pass'}
                 </span>
-                <span className="font-bold text-sm text-[#D1AC3E]">
-                  {formatUSD(cents(dayPassProduct?.unitPriceCents ?? (category === 'adult' ? 1500 : 800)))}
-                  /day
+                <span className="tabular text-sm font-semibold text-bright-gold">
+                  {formatUSD(
+                    cents(dayPassProduct?.unitPriceCents ?? (category === 'adult' ? 1500 : 800)),
+                  )}{' '}
+                  / evening
                 </span>
               </div>
-              <p className="mt-1 text-xs text-white/65">
-                Pick any single evening or combination of festival days.
+              <p className="mt-1 text-xs text-white/60">
+                Choose one evening or any combination of evenings.
               </p>
             </button>
 
-            {/* All-Day Pass Option (handles Sold Out gracefully!) */}
             {(() => {
               const soldOut = (allDayProduct?.availability.remaining ?? 0) <= 0;
               const selected = passKind === 'all_day';
@@ -103,30 +103,30 @@ export function PassDaySelector({
                   disabled={soldOut}
                   onClick={() => !soldOut && onChangePassKind('all_day')}
                   aria-pressed={selected}
-                  className={`text-left rounded-xl border p-3.5 transition-colors ${
+                  className={`rounded-control border p-4 text-left transition-colors ${
                     soldOut
-                      ? 'border-white/10 bg-white/[0.02] opacity-65 cursor-not-allowed'
+                      ? 'cursor-not-allowed border-white/10 opacity-60'
                       : selected
-                        ? 'border-[#C99B24] bg-[#C99B24]/15 cursor-pointer'
-                        : 'border-white/20 bg-white/[0.04] hover:border-white/40 cursor-pointer'
+                        ? 'cursor-pointer border-primary bg-primary/10'
+                        : 'cursor-pointer border-white/15 hover:border-white/35'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-sm text-white">
-                      {allDayProduct?.name ?? 'All-Day Pass'}
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-semibold text-white">
+                      {allDayProduct?.name ?? 'All-day pass'}
                     </span>
                     {soldOut ? (
-                      <Badge variant="sold-out">Sold Out</Badge>
+                      <Badge variant="sold-out">Sold out</Badge>
                     ) : (
-                      <span className="font-bold text-sm text-[#D1AC3E]">
-                        {formatUSD(cents(allDayProduct?.unitPriceCents ?? 3000))} flat
+                      <span className="tabular text-sm font-semibold text-bright-gold">
+                        {formatUSD(cents(allDayProduct?.unitPriceCents ?? 3000))}
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-white/65">
+                  <p className="mt-1 text-xs text-white/60">
                     {soldOut
-                      ? 'All-Day Adult Passes are sold out — select Day Pass days instead.'
-                      : 'Covers all 5 festival days (Dec 10–14) at a discounted flat rate.'}
+                      ? 'Sold out — choose evening day passes instead.'
+                      : 'Covers all five evenings (10 – 14 December).'}
                   </p>
                 </button>
               );
@@ -134,18 +134,15 @@ export function PassDaySelector({
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-[#28A736]/50 bg-[#28A736]/10 px-3.5 py-2.5 text-xs text-[#4CC75A]">
-          Toddlers under age 5 enter <strong>Free ($0)</strong>. Select the festival days they will
-          attend with their guardian so we include them on your gate pass.
-        </div>
+        <p className="rounded-control border border-success/40 px-4 py-3 text-xs leading-relaxed text-success-on-dark">
+          Children under 5 enter free ($0.00). Pick the evenings they will attend with their parent
+          or guardian so they are included on your gate pass.
+        </p>
       )}
 
-      {/* Day Picker Chips (shown for day_pass and free_infant) */}
       {(passKind === 'day_pass' || passKind === 'free_infant') && (
         <div>
-          <span className="block text-sm font-medium text-white mb-2">
-            Select Attending Festival Day(s)
-          </span>
+          <span className="mb-2 block text-sm font-medium text-white/90">Evenings attending</span>
           <div className="flex flex-wrap gap-2">
             {FESTIVAL_DAYS.map((day) => {
               const isPast = day.date < todayIso;
@@ -157,15 +154,15 @@ export function PassDaySelector({
                   disabled={isPast}
                   onClick={() => toggleDay(day.date)}
                   aria-pressed={active}
-                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-colors ${
+                  className={`inline-flex min-h-10 items-center gap-1.5 rounded-control border px-3.5 py-1.5 text-sm transition-colors ${
                     isPast
-                      ? 'border-white/10 bg-white/[0.02] text-white/30 cursor-not-allowed'
+                      ? 'cursor-not-allowed border-white/10 text-white/30'
                       : active
-                        ? 'border-[#C99B24] bg-[#C99B24] text-[#2C2C2C] font-semibold cursor-pointer'
-                        : 'border-white/25 bg-white/[0.05] text-white hover:border-[#D1AC3E] cursor-pointer'
+                        ? 'cursor-pointer border-primary bg-primary font-semibold text-primary-dark'
+                        : 'cursor-pointer border-white/20 text-white/85 hover:border-bright-gold hover:text-white'
                   }`}
                 >
-                  {active && <Check className="h-3.5 w-3.5 stroke-[2.5]" />}
+                  {active && <Check className="h-3.5 w-3.5 stroke-[2.5]" aria-hidden="true" />}
                   <span>{day.shortLabel}</span>
                 </button>
               );
@@ -176,8 +173,8 @@ export function PassDaySelector({
       )}
 
       {passKind === 'all_day' && (
-        <p className="text-xs text-[#4CC75A]">
-          ✓ Valid on all 5 festival evenings: Thu 10 Dec through Mon 14 Dec 2026.
+        <p className="text-xs text-success-on-dark">
+          Valid on all five evenings: Thursday 10 – Monday 14 December 2026.
         </p>
       )}
     </div>

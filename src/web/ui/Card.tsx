@@ -1,8 +1,14 @@
 import React from 'react';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  surface?: 'glass' | 'cream';
+  surface?: 'glass' | 'cream' | 'outline';
 }
+
+const SURFACE_CLASSES: Record<NonNullable<CardProps['surface']>, string> = {
+  glass: 'border border-glass-border bg-glass text-white',
+  cream: 'bg-cream text-heading',
+  outline: 'border border-white/15 text-white',
+};
 
 export function Card({
   surface = 'glass',
@@ -10,13 +16,8 @@ export function Card({
   children,
   ...rest
 }: CardProps): React.ReactElement {
-  const surfaceClass =
-    surface === 'cream'
-      ? 'bg-[#FDF3E4] text-[#291900] border border-[#BC9226]/60 shadow-lg'
-      : 'bg-white/[0.05] text-white border border-white/20 backdrop-blur-sm';
-
   return (
-    <div className={`rounded-2xl ${surfaceClass} ${className}`} {...rest}>
+    <div className={`rounded-card ${SURFACE_CLASSES[surface]} ${className}`} {...rest}>
       {children}
     </div>
   );

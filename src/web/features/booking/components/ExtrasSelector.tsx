@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Minus, Plus, Sparkles, Utensils } from 'lucide-react';
+import { Check, Minus, Plus } from 'lucide-react';
 import {
   cents,
   FESTIVAL_DAYS,
@@ -78,69 +78,74 @@ export function ExtrasSelector({
   };
 
   return (
-    <div className="space-y-4 rounded-xl border border-white/15 bg-white/[0.03] p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[#FDF3E4]">Extra Festival Add-Ons</span>
-        <span className="text-xs text-white/60">Optional · Printed on boarding pass</span>
-      </div>
-
-      {/* 1. Dinner Plate ($12 per person, per attending day) */}
-      <div className="space-y-2 pt-1 border-t border-white/10">
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white">
-            <Utensils className="h-4 w-4 text-[#D1AC3E]" />
-            Dinner Plate ({formatUSD(cents(dinnerProd?.unitPriceCents ?? 1200))}/day)
+    <div className="divide-y divide-white/10 border-y border-white/10">
+      {/* 1. Dinner plate */}
+      <div className="py-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <span className="text-sm font-medium text-white">Dinner plate</span>
+            <p className="mt-0.5 text-xs text-white/55">
+              Vegetarian evening meal on any evening covered by your pass.
+            </p>
+          </div>
+          <span className="tabular shrink-0 text-sm text-bright-gold">
+            {formatUSD(cents(dinnerProd?.unitPriceCents ?? 1200))} / evening
           </span>
-          <span className="text-xs text-white/60">Available on your pass days</span>
         </div>
 
-        {validDates.length === 0 ? (
-          <p className="text-xs text-white/50">Select at least one festival day above first.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {FESTIVAL_DAYS.filter((d) => validSet.has(d.date)).map((day) => {
-              const active = extras.dinnerDates.includes(day.date);
-              return (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => toggleDinnerDate(day.date)}
-                  aria-pressed={active}
-                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
-                    active
-                      ? 'border-[#C99B24] bg-[#C99B24] text-[#2C2C2C] font-semibold'
-                      : 'border-white/20 bg-white/[0.04] text-white/85 hover:border-[#D1AC3E]'
-                  }`}
-                >
-                  {active && <Check className="h-3.5 w-3.5" />}
-                  <span>Dinner · {day.shortLabel}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div className="mt-3">
+          {validDates.length === 0 ? (
+            <p className="text-xs text-white/45">Select at least one evening above first.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {FESTIVAL_DAYS.filter((d) => validSet.has(d.date)).map((day) => {
+                const active = extras.dinnerDates.includes(day.date);
+                return (
+                  <button
+                    key={day.date}
+                    type="button"
+                    onClick={() => toggleDinnerDate(day.date)}
+                    aria-pressed={active}
+                    className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-control border px-3 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? 'border-primary bg-primary font-semibold text-primary-dark'
+                        : 'border-white/20 text-white/80 hover:border-bright-gold hover:text-white'
+                    }`}
+                  >
+                    {active && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                    <span>{day.shortLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 2. Garba Workshop ($20 — Fri 11 Dec & Sun 13 Dec only, ages 5+) */}
+      {/* 2. Garba workshop (Fri 11 & Sun 13 Dec, ages 5+) */}
       {category !== 'infant' && (
-        <div className="space-y-2 pt-2 border-t border-white/10">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-white">
-              <Sparkles className="h-4 w-4 text-[#D1AC3E]" />
-              Garba Workshop ({formatUSD(cents(workshopProd?.unitPriceCents ?? 2000))} each)
+        <div className="py-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white">Garba workshop</span>
+                {workshopRemaining <= 0 ? (
+                  <Badge variant="sold-out">Sold out</Badge>
+                ) : workshopRemaining <= 5 ? (
+                  <Badge variant="low-stock">{workshopRemaining} left</Badge>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-xs text-white/55">
+                Runs on Friday 11 and Sunday 13 December only (requires an entry pass for that
+                evening).
+              </p>
+            </div>
+            <span className="tabular shrink-0 text-sm text-bright-gold">
+              {formatUSD(cents(workshopProd?.unitPriceCents ?? 2000))} / session
             </span>
-            {workshopRemaining <= 0 ? (
-              <Badge variant="sold-out">Sold Out</Badge>
-            ) : workshopRemaining <= 5 ? (
-              <Badge variant="low-stock">Only {workshopRemaining} spots left</Badge>
-            ) : null}
           </div>
-          <p className="text-xs text-white/60">
-            Runs on <strong>Fri 11 Dec</strong> and <strong>Sun 13 Dec</strong> only (requires an
-            entry pass valid on that day).
-          </p>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {FESTIVAL_DAYS.filter((d) => GARBA_WORKSHOP_DATES.includes(d.date)).map((day) => {
               const attendingThatDay = validSet.has(day.date);
               const active = extras.workshopDates.includes(day.date);
@@ -152,18 +157,18 @@ export function ExtrasSelector({
                   disabled={disabled}
                   onClick={() => toggleWorkshopDate(day.date)}
                   aria-pressed={active}
-                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-control border px-3 py-1 text-xs font-medium transition-colors ${
                     disabled
-                      ? 'border-white/10 bg-white/[0.02] text-white/35 cursor-not-allowed'
+                      ? 'cursor-not-allowed border-white/10 text-white/35'
                       : active
-                        ? 'border-[#C99B24] bg-[#C99B24] text-[#2C2C2C] font-semibold cursor-pointer'
-                        : 'border-white/20 bg-white/[0.04] text-white/85 hover:border-[#D1AC3E] cursor-pointer'
+                        ? 'cursor-pointer border-primary bg-primary font-semibold text-primary-dark'
+                        : 'cursor-pointer border-white/20 text-white/80 hover:border-bright-gold hover:text-white'
                   }`}
                 >
-                  {active && <Check className="h-3.5 w-3.5" />}
+                  {active && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
                   <span>
-                    Workshop · {day.shortLabel}
-                    {!attendingThatDay ? ' (Pass required)' : ''}
+                    {day.shortLabel}
+                    {!attendingThatDay ? ' (pass needed)' : ''}
                   </span>
                 </button>
               );
@@ -172,26 +177,27 @@ export function ExtrasSelector({
         </div>
       )}
 
-      {/* 3. Dandiya Sticks Souvenir ($5/pair) */}
-      <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+      {/* 3. Dandiya sticks */}
+      <div className="flex flex-wrap items-center justify-between gap-4 py-4">
         <div>
-          <span className="block text-xs sm:text-sm font-medium text-white">
-            Dandiya Sticks Pair ({formatUSD(cents(dandiyaProd?.unitPriceCents ?? 500))}/pair)
-          </span>
-          <span className="text-xs text-white/60">Decorated wooden souvenir pair</span>
+          <span className="text-sm font-medium text-white">Dandiya sticks</span>
+          <p className="mt-0.5 text-xs text-white/55">
+            Wooden pair to collect at the gate ({formatUSD(cents(dandiyaProd?.unitPriceCents ?? 500))}{' '}
+            per pair).
+          </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/[0.04] p-1">
+        <div className="inline-flex items-center gap-1 rounded-control border border-white/20 p-1">
           <button
             type="button"
             aria-label="Decrease Dandiya pairs"
             disabled={extras.dandiyaPairs <= 0}
             onClick={() => setDandiyaPairs(extras.dandiyaPairs - 1)}
-            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
+            className="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-sm text-white/80 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-35"
           >
-            <Minus className="h-4 w-4" />
+            <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
-          <span className="w-8 text-center font-semibold text-sm" aria-live="polite">
+          <span className="tabular w-8 text-center text-sm font-semibold" aria-live="polite">
             {extras.dandiyaPairs}
           </span>
           <button
@@ -199,9 +205,9 @@ export function ExtrasSelector({
             aria-label="Increase Dandiya pairs"
             disabled={extras.dandiyaPairs >= 20}
             onClick={() => setDandiyaPairs(extras.dandiyaPairs + 1)}
-            className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
+            className="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-sm text-white/80 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-35"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>

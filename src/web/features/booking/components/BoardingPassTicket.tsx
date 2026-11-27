@@ -1,9 +1,9 @@
-import React from 'react';
-import { Download, Plane, QrCode, ShieldCheck } from 'lucide-react';
-import type { IssuedPassDTO } from '@contract/index';
-import { EVENT_METADATA } from '@domain/index';
-import { getPassesPdfUrl } from '../../../api/endpoints';
-import { Button } from '../../../ui/Button';
+import React from "react";
+import { Download, Plane, QrCode } from "lucide-react";
+import type { IssuedPassDTO } from "@contract/index";
+import { EVENT_METADATA } from "@domain/index";
+import { getPassesPdfUrl } from "../../../api/endpoints";
+import { Button } from "../../../ui/Button";
 
 export interface BoardingPassTicketProps {
   bookingId: string;
@@ -22,121 +22,125 @@ export function BoardingPassTicket({
 
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-2xl border-2 border-[#BC9226] bg-[#FDF3E4] text-[#291900] shadow-xl">
-        {/* Top airline-style dark & gold header ribbon */}
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#291900] px-5 py-3.5 text-[#FDF3E4] border-b-2 border-[#C99B24]">
-          <div className="flex items-center gap-2.5">
-            <Plane className="h-5 w-5 text-[#D1AC3E] shrink-0" aria-hidden="true" />
+      <div className="relative overflow-hidden rounded-card border border-gold bg-cream text-heading">
+        {/* Airline-style boarding pass header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary bg-heading px-5 py-3.5 text-cream sm:px-6">
+          <div className="flex items-center gap-3">
+            <Plane
+              className="h-4 w-4 shrink-0 text-bright-gold"
+              aria-hidden="true"
+            />
             <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[#D1AC3E] font-semibold">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-bright-gold">
                 {EVENT_METADATA.venue}
               </p>
-              <h3 className="font-display text-base sm:text-lg font-bold leading-tight">
-                {EVENT_METADATA.name} · Festival Boarding Pass
+              <h3 className="font-serif text-base text-cream sm:text-lg">
+                {EVENT_METADATA.name}
               </h3>
             </div>
           </div>
-          <div className="text-right">
-            <span className="text-[10px] uppercase tracking-wider text-[#D1AC3E] block">
-              Booking Ref
+          <div className="text-left sm:text-right">
+            <span className="block text-[10px] uppercase tracking-wider text-cream/60">
+              Booking ref
             </span>
-            <span className="font-mono text-sm font-bold text-[#FDF3E4]">{reference}</span>
+            <span className="tabular font-mono text-sm font-semibold text-cream">
+              {reference}
+            </span>
           </div>
         </div>
 
-        {/* Main ticket body + perforated right stub */}
-        <div className="grid grid-cols-1 md:grid-cols-12 relative">
-          {/* Left main passenger details (8 cols) */}
-          <div className="md:col-span-8 p-5 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Main passenger coupon + perforated gate stub */}
+        <div className="relative grid grid-cols-1 md:grid-cols-12">
+          <div className="space-y-4 p-5 sm:p-6 md:col-span-8">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-[#645743]">
-                  Passholder Name
+                <span className="block text-[11px] uppercase tracking-wider text-primary-text">
+                  Passholder
                 </span>
-                <span className="font-display text-xl font-bold text-[#291900] wrap-break-word">
+                <span className="mt-0.5 block font-serif text-2xl leading-tight text-heading wrap-break-word">
                   {pass.fullName}
                 </span>
               </div>
               <div>
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-[#645743]">
-                  Pass Category & Age
+                <span className="block text-[11px] uppercase tracking-wider text-primary-text">
+                  Pass &amp; age
                 </span>
-                <span className="text-sm font-bold text-[#291900]">
+                <span className="mt-1 block text-sm font-semibold text-heading">
                   {pass.passLabel} · Age {pass.age}
                 </span>
               </div>
             </div>
 
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-[#645743]">
-                Validity of Pass
-              </span>
-              <span className="text-sm font-semibold text-[#291900]">
-                {pass.validDatesDisplay}
-              </span>
-            </div>
-
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-[#645743]">
-                Extras Availed by Passholder
-              </span>
-              <span className="text-sm text-[#291900]">
-                {pass.extrasSummary.join('  •  ')}
-              </span>
+            <div className="grid grid-cols-1 gap-4 border-t border-heading/10 pt-3.5 sm:grid-cols-2">
+              <div>
+                <span className="block text-[11px] uppercase tracking-wider text-primary-text">
+                  Valid evenings
+                </span>
+                <span className="mt-0.5 block text-sm font-medium text-heading">
+                  {pass.validDatesDisplay}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[11px] uppercase tracking-wider text-primary-text">
+                  Add-ons
+                </span>
+                <span className="mt-0.5 block text-sm text-heading">
+                  {pass.extrasSummary.join(" · ")}
+                </span>
+              </div>
             </div>
 
             {hasGuardian && (
-              <div className="rounded-xl border border-[#C99B24] bg-[#F5E4C3] px-3.5 py-2.5">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#291900]">
-                  <ShieldCheck className="h-4 w-4 text-[#1E7A29]" aria-hidden="true" />
-                  <span>Registered Guardian (Minor Safeguard)</span>
-                </div>
-                <p className="mt-1 text-sm font-bold text-[#291900]">
-                  {pass.guardianName} <span className="font-normal text-[#645743]">·</span>{' '}
+              <div className="rounded-control border border-gold/70 px-3.5 py-2.5">
+                <span className="block text-[11px] uppercase tracking-wider text-primary-text">
+                  Parent / guardian on file
+                </span>
+                <p className="mt-0.5 text-sm font-semibold text-heading">
+                  {pass.guardianName}{" "}
+                  <span className="font-normal text-primary-text">·</span>{" "}
                   {pass.guardianPhone}
                 </p>
               </div>
             )}
 
-            <div className="pt-1 border-t border-[#BC9226]/30 flex flex-wrap items-center justify-between gap-2 text-xs text-[#645743]">
-              <span>Venue: {EVENT_METADATA.venue}, Allen, TX</span>
-              <span>Gates open 5:00 PM CST</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-heading/10 pt-3 text-xs text-primary-text">
+              <span>{EVENT_METADATA.address}</span>
+              <span>Gates open 5:00 pm CST</span>
             </div>
           </div>
 
-          {/* Perforated tear-off boarding stub (4 cols) */}
-          <div className="md:col-span-4 relative border-t-2 md:border-t-0 md:border-l-2 border-dashed border-[#BC9226] bg-[#F9EBD2] p-5 flex flex-col items-center justify-center text-center">
-            {/* Decorative semicircular punch notches on desktop */}
+          {/* Perforated tear-off stub */}
+          <div className="relative flex flex-col items-center justify-center border-t border-dashed border-gold/80 p-5 text-center md:col-span-4 md:border-t-0 md:border-l">
             <span
               aria-hidden="true"
-              className="hidden md:block absolute -left-3 -top-3 h-6 w-6 rounded-full bg-[#2C2C2C] border border-[#BC9226]"
+              className="absolute -left-2.5 -top-2.5 hidden h-5 w-5 rounded-full border border-gold bg-primary-dark md:block"
             />
             <span
               aria-hidden="true"
-              className="hidden md:block absolute -left-3 -bottom-3 h-6 w-6 rounded-full bg-[#2C2C2C] border border-[#BC9226]"
+              className="absolute -bottom-2.5 -left-2.5 hidden h-5 w-5 rounded-full border border-gold bg-primary-dark md:block"
             />
 
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#645743] mb-2">
-              Gate Check-In Stub
+            <span className="mb-2 text-[10px] uppercase tracking-widest text-primary-text">
+              Gate check-in
             </span>
 
             {pass.qrDataUrl ? (
               <img
                 src={pass.qrDataUrl}
                 alt={`Check-in QR code for ${pass.fullName}`}
-                className="h-28 w-28 rounded-lg border border-[#BC9226]/60 bg-[#FDF3E4] p-1"
+                className="h-28 w-28 rounded-sm border border-heading/15 bg-white p-1.5"
               />
             ) : (
-              <div className="h-28 w-28 rounded-lg border border-[#BC9226]/60 flex items-center justify-center">
-                <QrCode className="h-12 w-12 text-[#291900]" />
+              <div className="flex h-28 w-28 items-center justify-center rounded-sm border border-heading/15 bg-white">
+                <QrCode className="h-12 w-12 text-heading" aria-hidden="true" />
               </div>
             )}
 
-            <span className="mt-2 font-mono text-xs font-bold text-[#291900]">
+            <span className="tabular mt-2.5 font-mono text-xs font-semibold text-heading">
               {pass.passCode}
             </span>
-            <span className="mt-1 inline-block rounded-full bg-[#1E7A29]/15 px-2.5 py-0.5 text-[11px] font-bold text-[#1E7A29]">
-              CONFIRMED · PAID
+            <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-success-on-light">
+              Confirmed
             </span>
           </div>
         </div>
@@ -150,8 +154,8 @@ export function BoardingPassTicket({
             className="inline-block"
           >
             <Button variant="secondary" size="sm">
-              <Download className="h-4 w-4" />
-              Download {pass.fullName.split(' ')[0]}’s Pass (PDF)
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Download {pass.fullName.split(" ")[0]}’s pass (PDF)
             </Button>
           </a>
         </div>

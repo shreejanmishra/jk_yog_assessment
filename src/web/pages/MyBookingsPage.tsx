@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  FileText,
-  Mail,
-  MapPin,
-  Ticket,
-  Users,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Mail, Ticket } from 'lucide-react';
 import type { BookingDetailResponseDTO } from '@contract/index';
 import { cents, formatUSD } from '@domain/index';
 import { fetchMyBookings, getPassesPdfUrl } from '../api/endpoints';
@@ -49,139 +39,125 @@ export function MyBookingsPage(): React.ReactElement {
   const activePass = passModalBooking?.passes[passIndex];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#2C2C2C] text-white">
+    <div className="flex min-h-screen flex-col bg-primary-dark text-white">
       <Header />
-      <main className="flex-1 mx-auto w-full max-w-5xl px-4 sm:px-6 pt-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Ticket className="h-7 w-7 text-[#D1AC3E]" />
-            <div>
-              <h1 className="font-display text-3xl font-bold text-[#FDF3E4]">My Bookings</h1>
-              <p className="text-sm text-white/70">
-                View your festival bookings, itemized invoices, and downloadable boarding passes
-              </p>
-            </div>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 sm:px-6 sm:pt-14">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-bright-gold">Account</p>
+            <h1 className="mt-1 font-serif text-4xl text-cream">My bookings</h1>
+            <p className="mt-2 text-sm text-white/65">
+              Open your festival passes or itemized invoice and download either as a PDF.
+            </p>
           </div>
-          <Button variant="primary" size="sm" onClick={() => navigate('/book')}>
-            Book More Passes
+          <Button size="sm" onClick={() => navigate('/book')}>
+            Book tickets
           </Button>
         </div>
 
         {!user ? (
-          <Card className="p-6 space-y-4">
-            <p className="text-sm text-white/80">
-              Sign in with the email used during booking (or try the Demo Profile) to inspect your
-              passes and invoices.
+          <div className="mt-8 space-y-4 rounded-card border border-white/15 p-6">
+            <p className="text-sm text-white/75">
+              Sign in with the email address you used during booking (or try the demo account) to
+              view your passes and invoices.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button variant="primary" onClick={() => void loginDemo()}>
-                1-Click Demo Sign In
-              </Button>
+              <Button onClick={() => void loginDemo()}>Try demo account</Button>
               <Button variant="secondary" onClick={openSignInModal}>
-                Sign In with Email
+                Sign in with email
               </Button>
             </div>
-          </Card>
+          </div>
         ) : loading ? (
-          <p className="text-sm text-white/70 py-8">Loading your bookings…</p>
+          <p className="py-10 text-sm text-white/60">Loading bookings…</p>
         ) : bookings.length === 0 ? (
-          <Card className="p-8 text-center space-y-4">
-            <p className="font-display text-xl text-[#FDF3E4]">
-              No bookings found yet for {user.email}
+          <div className="mt-8 space-y-4 rounded-card border border-white/15 p-8">
+            <h2 className="font-serif text-2xl text-cream">No bookings yet for {user.email}</h2>
+            <p className="max-w-md text-sm text-white/65">
+              Book an individual or group pass using {user.email} and your passes and invoice will
+              appear here.
             </p>
-            <p className="text-sm text-white/70 max-w-md mx-auto">
-              Book an Individual or Group pass using <strong>{user.email}</strong> and your
-              boarding passes and invoice will automatically appear here.
-            </p>
-            <Button variant="primary" onClick={() => navigate('/book')}>
-              Book Sharad Utsav 2026 Passes
-            </Button>
-          </Card>
+            <Button onClick={() => navigate('/book')}>Book Sharad Utsav passes</Button>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2">
             {bookings.map((bk) => (
-              <Card key={bk.bookingId} className="p-6 flex flex-col justify-between space-y-5">
+              <Card
+                key={bk.bookingId}
+                surface="outline"
+                className="flex flex-col justify-between space-y-5 p-6"
+              >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-bold text-[#D1AC3E]">
+                    <span className="tabular font-mono text-xs text-bright-gold">
                       {bk.reference}
                     </span>
                     <Badge variant={bk.status === 'confirmed' ? 'success' : 'low-stock'}>
-                      {bk.status === 'confirmed' ? 'Confirmed' : 'Pending Payment'}
+                      {bk.status === 'confirmed' ? 'Confirmed' : 'Pending payment'}
                     </Badge>
                   </div>
 
                   <div>
-                    <h2 className="font-display text-2xl font-bold text-[#FDF3E4]">
-                      {bk.event.name}
-                    </h2>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-white/75">
-                      <MapPin className="h-3.5 w-3.5 text-[#D1AC3E]" />
-                      {bk.event.venue}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-white/75">
-                      <CalendarDays className="h-3.5 w-3.5 text-[#D1AC3E]" />
-                      {bk.event.datesLabel}
+                    <h2 className="font-serif text-2xl text-cream">{bk.event.name}</h2>
+                    <p className="mt-1 text-xs text-white/60">
+                      {bk.event.venue} · {bk.event.datesLabel}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 flex items-center justify-between text-sm">
-                    <span className="inline-flex items-center gap-1.5 text-white/80">
-                      <Users className="h-4 w-4 text-[#D1AC3E]" />
-                      {bk.passes.length} Pass{bk.passes.length === 1 ? '' : 'es'} ({bk.mode})
-                    </span>
-                    <span className="font-bold text-[#FDF3E4]">
+                  <dl className="flex items-baseline justify-between border-t border-white/10 pt-3 text-sm">
+                    <dt className="text-white/70">
+                      {bk.passes.length} {bk.passes.length === 1 ? 'pass' : 'passes'} ({bk.mode})
+                    </dt>
+                    <dd className="tabular font-serif text-xl text-cream">
                       {formatUSD(cents(bk.totalCents))}
-                    </span>
-                  </div>
+                    </dd>
+                  </dl>
                 </div>
 
-                {/* Bottom card icon actions: Invoice Modal & Pass Modal */}
+                {/* Required UX: Invoice icon and Pass icon at the bottom of the card opening modals with Download as PDF */}
                 {bk.status === 'confirmed' ? (
-                  <div className="pt-3 border-t border-white/15 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4">
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setInvoiceModalBooking(bk)}
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         aria-label={`Open invoice for ${bk.reference}`}
-                        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#BC9226]/70 bg-white/[0.06] px-3.5 py-2 text-xs font-semibold text-[#FDF3E4] hover:bg-[#C99B24]/20 transition-colors cursor-pointer"
+                        onClick={() => setInvoiceModalBooking(bk)}
                       >
-                        <FileText className="h-4 w-4 text-[#D1AC3E]" />
+                        <FileText className="h-4 w-4 text-bright-gold" aria-hidden="true" />
                         <span>Invoice</span>
-                      </button>
+                      </Button>
 
-                      <button
-                        type="button"
+                      <Button
+                        size="sm"
+                        aria-label={`Open passes for ${bk.reference}`}
                         onClick={() => {
                           setPassIndex(0);
                           setPassModalBooking(bk);
                         }}
-                        aria-label={`Open passes for ${bk.reference}`}
-                        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#C99B24] bg-[#C99B24] px-3.5 py-2 text-xs font-bold text-[#2C2C2C] hover:bg-[#D1AC3E] transition-colors cursor-pointer"
                       >
-                        <Ticket className="h-4 w-4" />
+                        <Ticket className="h-4 w-4" aria-hidden="true" />
                         <span>Pass ({bk.passes.length})</span>
-                      </button>
+                      </Button>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setEmailBookingId(bk.bookingId)}
                       aria-label={`Preview confirmation email for ${bk.reference}`}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs text-white/75 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-control px-2.5 text-xs text-white/65 hover:bg-white/[0.05] hover:text-white"
                     >
-                      <Mail className="h-4 w-4 text-[#D1AC3E]" />
-                      <span>Sent Email</span>
+                      <Mail className="h-3.5 w-3.5 text-bright-gold" aria-hidden="true" />
+                      <span>Sent email</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="pt-3 border-t border-white/15 flex justify-end">
+                  <div className="flex justify-end border-t border-white/10 pt-4">
                     <Button
-                      variant="primary"
                       size="sm"
                       onClick={() => navigate(`/pay/${bk.bookingId}?method=${bk.paymentMethod}`)}
                     >
-                      Complete Payment
+                      Complete payment
                     </Button>
                   </div>
                 )}
@@ -191,11 +167,10 @@ export function MyBookingsPage(): React.ReactElement {
         )}
       </main>
 
-      {/* Invoice Details + Download PDF Modal */}
       <Modal
         open={Boolean(invoiceModalBooking)}
         onClose={() => setInvoiceModalBooking(null)}
-        title="Festival Booking Invoice"
+        title="Booking invoice"
         subtitle={
           invoiceModalBooking
             ? `${invoiceModalBooking.event.name} · Ref ${invoiceModalBooking.reference}`
@@ -206,31 +181,32 @@ export function MyBookingsPage(): React.ReactElement {
         {invoiceModalBooking && <InvoiceView booking={invoiceModalBooking} />}
       </Modal>
 
-      {/* Boarding Pass Details + Download PDF Modal */}
       <Modal
         open={Boolean(passModalBooking)}
         onClose={() => setPassModalBooking(null)}
-        title="Festival Boarding Passes"
+        title="Boarding passes"
         subtitle={
           passModalBooking
-            ? `${passModalBooking.event.name} · ${passModalBooking.passes.length} Passholder(s)`
+            ? `${passModalBooking.event.name} · ${passModalBooking.passes.length} ${
+                passModalBooking.passes.length === 1 ? 'passholder' : 'passholders'
+              }`
             : undefined
         }
         maxWidthClass="max-w-3xl"
       >
         {passModalBooking && activePass && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {passModalBooking.passes.length > 1 && (
-              <div className="flex items-center justify-between rounded-xl bg-white/[0.06] px-4 py-2.5 text-sm">
+              <div className="flex items-center justify-between border-y border-white/10 py-2.5 text-sm">
                 <button
                   type="button"
                   disabled={passIndex === 0}
                   onClick={() => setPassIndex((i) => Math.max(0, i - 1))}
-                  className="inline-flex items-center gap-1 text-[#D1AC3E] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  className="inline-flex cursor-pointer items-center gap-1 text-bright-gold disabled:cursor-not-allowed disabled:opacity-35"
                 >
-                  <ChevronLeft className="h-4 w-4" /> Previous
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Previous
                 </button>
-                <span className="text-xs font-semibold text-white/85">
+                <span className="tabular text-xs text-white/70">
                   Pass {passIndex + 1} of {passModalBooking.passes.length} — {activePass.fullName}
                 </span>
                 <button
@@ -239,9 +215,9 @@ export function MyBookingsPage(): React.ReactElement {
                   onClick={() =>
                     setPassIndex((i) => Math.min(passModalBooking.passes.length - 1, i + 1))
                   }
-                  className="inline-flex items-center gap-1 text-[#D1AC3E] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  className="inline-flex cursor-pointer items-center gap-1 text-bright-gold disabled:cursor-not-allowed disabled:opacity-35"
                 >
-                  Next <ChevronRight className="h-4 w-4" />
+                  Next <ChevronRight className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -252,14 +228,14 @@ export function MyBookingsPage(): React.ReactElement {
               pass={activePass}
             />
 
-            <div className="pt-3 border-t border-white/15 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs text-white/65">
-                PDF formatted like an airline boarding pass (1 page per attendee)
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+              <span className="text-xs text-white/55">
+                One boarding-pass page per attendee
               </span>
               <a href={getPassesPdfUrl(passModalBooking.bookingId)} download>
-                <Button variant="primary">
-                  <Download className="h-4 w-4" />
-                  Download All Passes as PDF
+                <Button>
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download as PDF
                 </Button>
               </a>
             </div>

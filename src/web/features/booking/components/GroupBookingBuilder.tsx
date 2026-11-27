@@ -1,6 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { Edit2, Plus, ShieldCheck, Sparkles, Trash2, Users } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import {
+  buildCatalogMap,
+  calculateBookingQuote,
+  computeAttendeeIdentityKey,
+  DEFAULT_CATALOG,
+  DEFAULT_PROMOS,
   FESTIVAL_DAYS,
   formatCategoryLabel,
   isLegalAdultBooker,
@@ -8,20 +13,47 @@ import {
   isValidEmail,
   isValidPhone,
   requiresGuardian,
+  validateBookingRules,
+  type RuleViolation,
 } from '@domain/index';
+import { useCatalogStore } from '../../../stores/catalog-store';
 import { Badge } from '../../../ui/Badge';
 import { Button } from '../../../ui/Button';
-import { Card } from '../../../ui/Card';
+import { FormSection } from '../../../ui/FormSection';
 import { FieldError, TextField } from '../../../ui/TextField';
 import { useBookingStore } from '../store/booking-store';
-import { parseIntegerAge, type AttendeeDraft } from '../store/transitions';
+import {
+  draftToBookingIntent,
+  parseIntegerAge,
+  type AttendeeDraft,
+} from '../store/transitions';
 import { AddAttendeeModal } from './AddAttendeeModal';
 import { ExtrasSelector } from './ExtrasSelector';
 import { PassDaySelector } from './PassDaySelector';
 
+function describePassSelection(att: AttendeeDraft): string {
+  if (att.passKind === 'all_day') return 'All-day pass (all 5 evenings)';
+  if (att.passKind === 'family_pass') return `Family pass (${att.days.join(', ')})`;
+  if (att.passKind === 'free_infant') return `Free entry (${att.days.join(', ')})`;
+  return `Day pass (${att.days.join(', ')})`;
+}
+
+function describeAddOns(att: AttendeeDraft): string | null {
+  const parts = [
+    att.extras.dinnerDates.length > 0 ? `Dinner × ${att.extras.dinnerDates.length}` : null,
+    att.extras.workshopDates.length > 0
+      ? `Garba workshop (${att.extras.workshopDates.join(', ')})`
+      : null,
+    att.extras.dandiyaPairs > 0 ? `Dandiya × ${att.extras.dandiyaPairs}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 export function GroupBookingBuilder(): React.ReactElement {
+  const catalog = useCatalogStore((s) => s.catalog);
   const {
     draft,
+    quoteState,
     patchBooker,
     addAttendee,
     updateAttendee,
@@ -31,8 +63,10 @@ export function GroupBookingBuilder(): React.ReactElement {
     openCheckoutModal,
   } = useBookingStore();
 
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAttendee, setEditingAttendee] = useState<AttendeeDraft | null>(null);
+  const [editingHasViolations, setEditingHasViolations] = useState(false);
   const [attempted, setAttempted] = useState(false);
 
   const bookerAge = parseIntegerAge(draft.booker.ageInput);
@@ -41,11 +75,11 @@ export function GroupBookingBuilder(): React.ReactElement {
   let bookerAgeError: string | null = null;
   if (hasBookerAge || attempted) {
     if (!hasBookerAge) {
-      bookerAgeError = 'Please enter the booker’s age.';
+      bookerAgeError = 'Please enter the lead booker’s age.';
     } else if (!isValidAgeInteger(bookerAge)) {
       bookerAgeError = 'Please enter a whole-number age between 0 and 120.';
     } else if (!isLegalAdultBooker(bookerAge)) {
-      bookerAgeError = `Booker is less than 18 (entered ${bookerAge}). Primary booker must be 18 or older.`;
+      bookerAgeError = `Booker is less than 18 (entered ${bookerAge}). Lead booker must be 18 or older.`;
     }
   }
 
@@ -53,7 +87,103 @@ export function GroupBookingBuilder(): React.ReactElement {
   const selfAttendee = draft.attendees.find((a) => a.isBooker) ?? null;
   const extraAttendees = draft.attendees.filter((a) => !a.isBooker);
 
-  // Detect if group has 2 adults + 1-2 children sharing a single day (eligible to save with $40 Family Pass!)
+  const bookerDuplicatePhoneMatch = useMemo(() => {
+    if (!draft.booker.isAttending) return null;
+    const bookerKey = computeAttendeeIdentityKey({
+      category: 'adult',
+      fullName: draft.booker.fullName,
+      phone: draft.booker.phone,
+    });
+    if (!bookerKey) return null;
+    return (
+      extraAttendees.find(
+        (att) =>
+          computeAttendeeIdentityKey({
+            category: att.selectedCategory,
+            fullName: att.fullName,
+            phone: att.phone,
+            guardianPhone: att.guardian.phone,
+          }) === bookerKey,
+      ) ?? null
+    );
+  }, [draft.booker.isAttending, draft.booker.fullName, draft.booker.phone, extraAttendees]);
+
+  const bookerPhoneError = bookerDuplicatePhoneMatch
+    ? `This phone number is already assigned to ${bookerDuplicatePhoneMatch.fullName.trim() || 'another attendee'} in this booking.`
+    : attempted && !isValidPhone(draft.booker.phone)
+      ? 'Please enter a valid phone number.'
+      : null;
+
+  // Evaluate the full shared domain rule + stock pipeline synchronously so every attendee card
+  // immediately displays any rule violation right where it occurs.
+  const { violationsByClientId, bookingLevelViolations, totalViolationCount } = useMemo(() => {
+    const liveProducts = DEFAULT_CATALOG.map((base) => {
+      const live = catalog?.products.find((p) => p.code === base.code);
+      return live ? { ...base, remainingStock: live.availability.remaining } : base;
+    });
+    const todayIsoDate = catalog?.event.todayIsoDate ?? '2026-11-26';
+    const intent = draftToBookingIntent(draft);
+    const catalogMap = buildCatalogMap(liveProducts);
+
+    const domainViolations = validateBookingRules({
+      intent,
+      catalogMap,
+      todayIsoDate,
+    });
+
+    // Also capture stock violations (e.g. 3 workshop seats requested when 2 remain) once structural rules pass
+    let stockOrServerViolations: readonly { path: string; code: string; message: string }[] = [];
+    if (domainViolations.length === 0) {
+      const quoteCheck = calculateBookingQuote({
+        intent,
+        products: liveProducts,
+        promos: DEFAULT_PROMOS,
+        nowIso: new Date().toISOString(),
+        todayIsoDate,
+        strictPromo: false,
+      });
+      if (!quoteCheck.ok) {
+        stockOrServerViolations = quoteCheck.violations;
+      }
+    } else if (quoteState.status === 'invalid') {
+      stockOrServerViolations = quoteState.issues.filter((iss) => iss.path.startsWith('stock.'));
+    }
+
+    const byClient = new Map<string, RuleViolation[]>();
+    const general: Array<{ path: string; code: string; message: string }> = [];
+
+    for (const v of domainViolations) {
+      const match = /^attendees\[(\d+)\]/.exec(v.path);
+      if (match) {
+        const idx = Number(match[1]);
+        const target = draft.attendees[idx];
+        if (target) {
+          const list = byClient.get(target.clientId) ?? [];
+          if (!list.some((existing) => existing.message === v.message)) {
+            list.push(v);
+          }
+          byClient.set(target.clientId, list);
+          continue;
+        }
+      }
+      if (!v.path.startsWith('booker.')) {
+        general.push(v);
+      }
+    }
+
+    for (const sv of stockOrServerViolations) {
+      if (!general.some((g) => g.message === sv.message)) {
+        general.push(sv);
+      }
+    }
+
+    return {
+      violationsByClientId: byClient,
+      bookingLevelViolations: general,
+      totalViolationCount: domainViolations.length + stockOrServerViolations.length,
+    };
+  }, [catalog, draft, quoteState]);
+
   const familySuggestion = useMemo(() => {
     if (draft.familyGroups.length > 0) return null;
     for (const day of FESTIVAL_DAYS) {
@@ -77,12 +207,28 @@ export function GroupBookingBuilder(): React.ReactElement {
           date: day.date,
           shortLabel: day.shortLabel,
           memberIds: chosen.map((m) => m.clientId),
-          savingsDollars: 6, // 2*$15 + 2*$8 = $46 vs $40 Family Pass
+          savingsDollars: 6,
         };
       }
     }
     return null;
   }, [draft.attendees, draft.familyGroups.length]);
+
+  const scrollToFirstProblem = (): void => {
+    window.requestAnimationFrame(() => {
+      const root = formRef.current;
+      if (!root) return;
+      const target = root.querySelector<HTMLElement>(
+        '[aria-invalid="true"], [data-has-violation="true"]',
+      );
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (target.matches('input, button, select, textarea')) {
+          target.focus({ preventScroll: true });
+        }
+      }
+    });
+  };
 
   const handleConfirmGroup = (e: React.FormEvent): void => {
     e.preventDefault();
@@ -91,311 +237,356 @@ export function GroupBookingBuilder(): React.ReactElement {
     if (
       draft.booker.fullName.trim().length < 2 ||
       !isValidPhone(draft.booker.phone) ||
+      Boolean(bookerDuplicatePhoneMatch) ||
       !isValidEmail(draft.booker.email) ||
       !isLegalAdultBooker(bookerAge) ||
-      draft.attendees.length === 0
+      draft.attendees.length === 0 ||
+      totalViolationCount > 0
     ) {
-      return;
-    }
-
-    if (
-      selfAttendee &&
-      selfAttendee.passKind === 'day_pass' &&
-      selfAttendee.days.length === 0
-    ) {
+      scrollToFirstProblem();
       return;
     }
 
     openCheckoutModal();
   };
 
+  const selfViolations = selfAttendee
+    ? (violationsByClientId.get(selfAttendee.clientId) ?? [])
+    : [];
+  const showSelfCardViolations =
+    attempted ||
+    Boolean(bookerDuplicatePhoneMatch) ||
+    isBookerUnder18 ||
+    (selfAttendee !== null &&
+      selfAttendee.passKind === 'day_pass' &&
+      selfAttendee.days.length === 0);
+
   return (
-    <form onSubmit={handleConfirmGroup} noValidate className="space-y-6">
-      {/* 1. Primary Booker Card */}
-      <Card className="p-5 sm:p-7 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-display text-2xl font-bold text-[#FDF3E4]">
-              Primary Booker Details
-            </h2>
-            <p className="text-sm text-white/70">
-              Person paying for the group (must be 18+). Confirmation & passes will be emailed here.
-            </p>
-          </div>
-          <label className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/[0.05] px-3.5 py-2 text-xs sm:text-sm font-medium cursor-pointer">
-            <input
-              type="checkbox"
-              checked={draft.booker.isAttending}
-              onChange={(e) => patchBooker({ isAttending: e.target.checked })}
-              className="h-4 w-4 accent-[#C99B24]"
-            />
-            <span>I am also attending</span>
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <TextField
-            label="Full Name"
-            required
-            placeholder="Ramesh Sharma"
-            value={draft.booker.fullName}
-            onChange={(e) => patchBooker({ fullName: e.target.value })}
-            error={
-              attempted && draft.booker.fullName.trim().length < 2
-                ? 'Please enter the booker’s full name.'
-                : null
-            }
-          />
-          <TextField
-            label="Phone Number"
-            type="tel"
-            required
-            placeholder="+1 469-555-0192"
-            value={draft.booker.phone}
-            onChange={(e) => patchBooker({ phone: e.target.value })}
-            error={
-              attempted && !isValidPhone(draft.booker.phone)
-                ? 'Please enter a valid phone number.'
-                : null
-            }
-          />
-          <TextField
-            label="Email Address"
-            type="email"
-            required
-            placeholder="ramesh@example.com"
-            value={draft.booker.email}
-            onChange={(e) => patchBooker({ email: e.target.value })}
-            error={
-              attempted && !isValidEmail(draft.booker.email)
-                ? 'Please enter a valid email address.'
-                : null
-            }
-          />
-          <TextField
-            label="Booker Age (on 10 Dec 2026)"
-            inputMode="numeric"
-            required
-            placeholder="e.g. 34"
-            value={draft.booker.ageInput}
-            onChange={(e) => patchBooker({ ageInput: e.target.value })}
-            error={bookerAgeError}
-          />
-        </div>
-
-        {selfAttendee && (
-          <div className="pt-4 border-t border-white/15 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-[#D1AC3E]">
-                Primary Booker’s Festival Pass & Add-Ons
-              </span>
-              <Badge variant="gold">Attendee #1 (Adult 18+)</Badge>
-            </div>
-            <PassDaySelector
-              category="adult"
-              passKind={selfAttendee.passKind}
-              selectedDays={selfAttendee.days}
-              onChangePassKind={(passKind) =>
-                updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, passKind }))
-              }
-              onChangeDays={(days) =>
-                updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, days }))
-              }
+    <>
+      <form ref={formRef} onSubmit={handleConfirmGroup} noValidate className="space-y-10">
+        <FormSection
+          step="1"
+          title="Lead booker"
+          description="The adult paying for the group (18 or over). Confirmation and passes are emailed here."
+          action={
+            <label className="inline-flex cursor-pointer items-center gap-2.5 text-sm text-white/85">
+              <input
+                type="checkbox"
+                checked={draft.booker.isAttending}
+                onChange={(e) => patchBooker({ isAttending: e.target.checked })}
+                className="h-4 w-4 accent-primary"
+              />
+              <span>I am also attending</span>
+            </label>
+          }
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextField
+              label="Full name"
+              required
+              placeholder="Ramesh Sharma"
+              value={draft.booker.fullName}
+              onChange={(e) => patchBooker({ fullName: e.target.value })}
               error={
-                attempted &&
-                selfAttendee.passKind === 'day_pass' &&
-                selfAttendee.days.length === 0
-                  ? 'Select at least one festival day.'
+                attempted && draft.booker.fullName.trim().length < 2
+                  ? 'Please enter the booker’s full name.'
                   : null
               }
             />
-            <ExtrasSelector
-              category="adult"
-              passKind={selfAttendee.passKind}
-              selectedDays={selfAttendee.days}
-              extras={selfAttendee.extras}
-              onChangeExtras={(extras) =>
-                updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, extras }))
+            <TextField
+              label="Phone number"
+              type="tel"
+              required
+              placeholder="+1 469-555-0192"
+              value={draft.booker.phone}
+              onChange={(e) => patchBooker({ phone: e.target.value })}
+              error={bookerPhoneError}
+            />
+            <TextField
+              label="Email address"
+              type="email"
+              required
+              placeholder="ramesh@example.com"
+              value={draft.booker.email}
+              onChange={(e) => patchBooker({ email: e.target.value })}
+              error={
+                attempted && !isValidEmail(draft.booker.email)
+                  ? 'Please enter a valid email address.'
+                  : null
               }
             />
+            <TextField
+              label="Age (on 10 December 2026)"
+              inputMode="numeric"
+              required
+              placeholder="34"
+              value={draft.booker.ageInput}
+              onChange={(e) => patchBooker({ ageInput: e.target.value })}
+              error={bookerAgeError}
+            />
+          </div>
+
+          {selfAttendee && (
+            <div className="mt-8 space-y-6 border-t border-white/10 pt-6">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-serif text-lg text-cream">Lead booker’s pass and add-ons</h3>
+                <Badge variant="neutral">Attendee 1</Badge>
+              </div>
+              <PassDaySelector
+                category="adult"
+                passKind={selfAttendee.passKind}
+                selectedDays={selfAttendee.days}
+                onChangePassKind={(passKind) =>
+                  updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, passKind }))
+                }
+                onChangeDays={(days) =>
+                  updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, days }))
+                }
+                error={
+                  attempted &&
+                  selfAttendee.passKind === 'day_pass' &&
+                  selfAttendee.days.length === 0
+                    ? 'Select at least one evening.'
+                    : null
+                }
+              />
+              <ExtrasSelector
+                category="adult"
+                passKind={selfAttendee.passKind}
+                selectedDays={selfAttendee.days}
+                extras={selfAttendee.extras}
+                onChangeExtras={(extras) =>
+                  updateAttendee(selfAttendee.clientId, (prev) => ({ ...prev, extras }))
+                }
+              />
+            </div>
+          )}
+        </FormSection>
+
+        {familySuggestion && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-gold/60 px-5 py-4">
+            <p className="text-sm text-white/85">
+              <span className="font-semibold text-cream">
+                Save ${familySuggestion.savingsDollars}.00 on {familySuggestion.shortLabel}:
+              </span>{' '}
+              combine 2 adults and 2 children into a single $40.00 Family Pass.
+            </p>
+            <Button
+              size="sm"
+              onClick={() =>
+                applyFamilyPassForDay(familySuggestion.date, familySuggestion.memberIds)
+              }
+            >
+              Apply $40.00 Family Pass
+            </Button>
           </div>
         )}
-      </Card>
 
-      {/* Family Pass $40 Smart Suggestion / Active Banner */}
-      {familySuggestion && (
-        <div className="rounded-2xl border border-[#C99B24] bg-[#C99B24]/15 p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 text-sm">
-            <Sparkles className="h-5 w-5 text-[#D1AC3E] shrink-0" />
-            <span>
-              <strong>Save ${familySuggestion.savingsDollars}.00:</strong> Bundle 2 Adults + 2
-              Children on <strong>{familySuggestion.shortLabel}</strong> into a{' '}
-              <strong>$40 Family Pass</strong>!
+        {draft.familyGroups.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-success/50 px-5 py-4 text-sm">
+            <span className="text-success-on-dark">
+              Family Pass ($40.00) applied for {draft.familyGroups[0]?.days.join(', ')}.
             </span>
+            <Button variant="secondary" size="sm" onClick={clearFamilyPass}>
+              Use individual passes
+            </Button>
           </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              applyFamilyPassForDay(familySuggestion.date, familySuggestion.memberIds)
-            }
-          >
-            Apply $40 Family Pass
-          </Button>
-        </div>
-      )}
+        )}
 
-      {draft.familyGroups.length > 0 && (
-        <div className="rounded-2xl border border-[#28A736]/60 bg-[#28A736]/15 p-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-          <span className="text-[#4CC75A] font-medium">
-            ✓ Family Pass ($40 flat) applied for {draft.familyGroups[0]?.days.join(', ')}.
-          </span>
-          <Button variant="secondary" size="sm" onClick={clearFamilyPass}>
-            Switch Back to Separate Passes
-          </Button>
-        </div>
-      )}
-
-      {/* 2. Group Attendees Section + Left "+" Icon & Greyed Dashed "Add attendee" Row */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl font-bold text-[#FDF3E4] flex items-center gap-2">
-            <Users className="h-5 w-5 text-[#D1AC3E]" />
-            <span>Group Attendees ({draft.attendees.length})</span>
-          </h3>
-          <span className="text-xs text-white/60">Max 20 attendees per booking</span>
-        </div>
-
-        {extraAttendees.map((att, idx) => {
-          const ageNum = parseIntegerAge(att.ageInput);
-          const minor = isValidAgeInteger(ageNum) && requiresGuardian(ageNum);
-          return (
-            <Card key={att.clientId} className="p-4 sm:p-5 flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-display text-lg font-bold text-[#FDF3E4]">
-                    {att.fullName || `Attendee ${idx + 2}`}
-                  </span>
-                  <Badge variant={att.selectedCategory === 'infant' ? 'free' : 'gold'}>
-                    {formatCategoryLabel(att.selectedCategory)} · Age {att.ageInput}
-                  </Badge>
+        <FormSection
+          step="2"
+          title={`Attendees (${draft.attendees.length})`}
+          description="Add adults, children (5–11) or under-5s. Up to 20 people per booking."
+        >
+          <div className="space-y-3">
+            {selfAttendee && (
+              <div
+                data-has-violation={
+                  showSelfCardViolations && selfViolations.length > 0 ? 'true' : undefined
+                }
+                className={`rounded-card border px-5 py-4 ${
+                  showSelfCardViolations && selfViolations.length > 0
+                    ? 'border-error bg-error/[0.06]'
+                    : 'border-white/10 bg-white/[0.02]'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="font-serif text-lg text-cream">
+                        {selfAttendee.fullName.trim() || 'Lead booker'}
+                      </span>
+                      <Badge variant="neutral">
+                        Attendee 1 · Lead booker
+                        {selfAttendee.ageInput.trim() ? ` · Age ${selfAttendee.ageInput.trim()}` : ''}
+                      </Badge>
+                      {showSelfCardViolations && selfViolations.length > 0 && (
+                        <Badge variant="sold-out">Rule violation</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-white/75">{describePassSelection(selfAttendee)}</p>
+                    {describeAddOns(selfAttendee) && (
+                      <p className="text-xs text-white/55">Add-ons: {describeAddOns(selfAttendee)}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-white/45">Configured in Step 1</span>
                 </div>
 
-                <p className="text-xs sm:text-sm text-white/80">
-                  <strong>Pass:</strong>{' '}
-                  {att.passKind === 'all_day'
-                    ? 'All-Day Pass (All 5 Days)'
-                    : att.passKind === 'family_pass'
-                      ? `Family Pass (${att.days.join(', ')})`
-                      : att.passKind === 'free_infant'
-                        ? `Free Entry (${att.days.join(', ')})`
-                        : `Day Pass (${att.days.join(', ')})`}
-                </p>
-
-                {(att.extras.dinnerDates.length > 0 ||
-                  att.extras.workshopDates.length > 0 ||
-                  att.extras.dandiyaPairs > 0) && (
-                  <p className="text-xs text-white/70">
-                    <strong>Extras:</strong>{' '}
-                    {[
-                      att.extras.dinnerDates.length > 0
-                        ? `Dinner × ${att.extras.dinnerDates.length}`
-                        : null,
-                      att.extras.workshopDates.length > 0
-                        ? `Garba Workshop (${att.extras.workshopDates.join(', ')})`
-                        : null,
-                      att.extras.dandiyaPairs > 0
-                        ? `Dandiya × ${att.extras.dandiyaPairs} pair(s)`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                )}
-
-                {minor && att.guardian.name && (
-                  <p className="inline-flex items-center gap-1.5 text-xs text-[#D1AC3E]">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span>
-                      Guardian: {att.guardian.name} ({att.guardian.phone})
-                    </span>
-                  </p>
+                {showSelfCardViolations && selfViolations.length > 0 && (
+                  <div className="mt-3 space-y-1 border-t border-error/30 pt-2.5">
+                    {selfViolations.map((v, i) => (
+                      <FieldError key={`${v.code}-${i}`} message={v.message} />
+                    ))}
+                  </div>
                 )}
               </div>
+            )}
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
+            {extraAttendees.map((att, idx) => {
+              const ageNum = parseIntegerAge(att.ageInput);
+              const minor = isValidAgeInteger(ageNum) && requiresGuardian(ageNum);
+              const attendeeNumber = (selfAttendee ? 2 : 1) + idx;
+              const addOnsLabel = describeAddOns(att);
+              const cardViolations = violationsByClientId.get(att.clientId) ?? [];
+              const hasViolation = cardViolations.length > 0;
+
+              return (
+                <div
+                  key={att.clientId}
+                  data-has-violation={hasViolation ? 'true' : undefined}
+                  className={`reveal rounded-card border px-5 py-4 transition-colors ${
+                    hasViolation
+                      ? 'border-error bg-error/[0.06]'
+                      : 'border-gold/40 bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <span className="font-serif text-lg text-cream">
+                          {att.fullName || `Attendee ${attendeeNumber}`}
+                        </span>
+                        <Badge variant={att.selectedCategory === 'infant' ? 'free' : 'gold'}>
+                          Attendee {attendeeNumber} · {formatCategoryLabel(att.selectedCategory)}
+                          {att.ageInput.trim() ? ` · Age ${att.ageInput.trim()}` : ''}
+                        </Badge>
+                        {hasViolation && (
+                          <Badge variant="sold-out">
+                            {cardViolations.length === 1
+                              ? '1 rule violation'
+                              : `${cardViolations.length} rule violations`}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-white/75">{describePassSelection(att)}</p>
+
+                      {addOnsLabel && <p className="text-xs text-white/55">Add-ons: {addOnsLabel}</p>}
+
+                      {minor && att.guardian.name && (
+                        <p className="text-xs text-bright-gold">
+                          Guardian: {att.guardian.name} ({att.guardian.phone})
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={hasViolation ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={() => {
+                          setEditingAttendee(att);
+                          setEditingHasViolations(hasViolation);
+                          setModalOpen(true);
+                        }}
+                      >
+                        {hasViolation ? 'Fix details' : 'Edit'}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        aria-label={`Remove ${att.fullName}`}
+                        onClick={() => removeAttendee(att.clientId)}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {hasViolation && (
+                    <div className="mt-3 space-y-1 border-t border-error/30 pt-2.5">
+                      {cardViolations.map((v, vIdx) => (
+                        <FieldError key={`${v.code}-${vIdx}`} message={v.message} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Required UX: Plus icon on the left + greyed out outline box beside it saying "Add attendee" */}
+            {draft.attendees.length < 20 && (
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
                   onClick={() => {
-                    setEditingAttendee(att);
+                    setEditingAttendee(null);
+                    setEditingHasViolations(false);
                     setModalOpen(true);
                   }}
+                  aria-label="Add attendee"
+                  className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-control border border-gold text-bright-gold transition-colors hover:bg-primary hover:text-primary-dark"
                 >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  aria-label={`Remove ${att.fullName}`}
-                  onClick={() => removeAttendee(att.clientId)}
+                  <Plus className="h-5 w-5" aria-hidden="true" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAttendee(null);
+                    setEditingHasViolations(false);
+                    setModalOpen(true);
+                  }}
+                  className="min-h-12 flex-1 cursor-pointer rounded-control border border-dashed border-white/25 px-4 py-3 text-left text-sm text-white/50 transition-colors hover:border-gold hover:text-white/85"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                  Add attendee
+                </button>
               </div>
-            </Card>
-          );
-        })}
+            )}
 
-        {/* Required UX: Plus icon on the left + greyed out outline box beside it saying "Add attendee" */}
-        {draft.attendees.length < 20 && (
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                setEditingAttendee(null);
-                setModalOpen(true);
-              }}
-              aria-label="Add attendee"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-[#C99B24] bg-[#C99B24]/15 text-[#D1AC3E] hover:bg-[#C99B24] hover:text-[#2C2C2C] transition-colors cursor-pointer"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
+            {attempted && draft.attendees.length === 0 && (
+              <FieldError message="Add at least one attendee (or tick ‘I am also attending’ above) before continuing." />
+            )}
+          </div>
+        </FormSection>
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditingAttendee(null);
-                setModalOpen(true);
-              }}
-              className="flex-1 min-h-12 rounded-xl border-2 border-dashed border-white/25 bg-white/[0.03] px-4 py-3 text-left text-sm font-medium text-white/55 hover:border-[#BC9226] hover:text-white/85 hover:bg-white/[0.05] transition-colors cursor-pointer"
-            >
-              Add attendee
-            </button>
+        {bookingLevelViolations.length > 0 && (
+          <div
+            data-has-violation="true"
+            className="space-y-1 rounded-card border border-error/70 bg-error/[0.06] px-5 py-4"
+          >
+            {bookingLevelViolations.map((v, idx) => (
+              <FieldError key={`${v.code}-${idx}`} message={v.message} />
+            ))}
           </div>
         )}
 
-        {attempted && draft.attendees.length === 0 && (
-          <FieldError message="Add at least one attendee (or enable 'I am also attending' above) to book." />
-        )}
-      </div>
-
-      {/* Confirm Footer */}
-      <Card className="p-5 flex flex-wrap items-center justify-between gap-4">
-        <div className="text-xs sm:text-sm text-white/75">
-          <strong>{draft.attendees.length}</strong> attendee pass
-          {draft.attendees.length === 1 ? '' : 'es'} ready · Server calculates exact group total &
-          promos next.
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-6">
+          <p className="tabular text-sm text-white/65">
+            {draft.attendees.length} {draft.attendees.length === 1 ? 'pass' : 'passes'} in this
+            booking
+          </p>
+          <Button type="submit" size="lg" disabled={isBookerUnder18}>
+            Confirm and review passes
+          </Button>
         </div>
-        <Button type="submit" variant="primary" size="lg" disabled={isBookerUnder18}>
-          Confirm Group & Review Passes
-        </Button>
-      </Card>
+      </form>
 
       <AddAttendeeModal
         open={modalOpen}
         initialAttendee={editingAttendee}
+        initialShowErrors={editingHasViolations}
+        existingAttendees={draft.attendees}
         bookerQuickFill={
           isLegalAdultBooker(bookerAge)
             ? { name: draft.booker.fullName, phone: draft.booker.phone }
@@ -404,6 +595,7 @@ export function GroupBookingBuilder(): React.ReactElement {
         onClose={() => {
           setModalOpen(false);
           setEditingAttendee(null);
+          setEditingHasViolations(false);
         }}
         onSave={(saved) => {
           if (editingAttendee) {
@@ -413,6 +605,6 @@ export function GroupBookingBuilder(): React.ReactElement {
           }
         }}
       />
-    </form>
+    </>
   );
 }

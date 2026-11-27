@@ -1,24 +1,39 @@
 import React from 'react';
-import { MapPin } from 'lucide-react';
 import { EVENT_METADATA } from '@domain/index';
 
 export function Footer(): React.ReactElement {
   return (
-    <footer className="border-t border-white/15 bg-[#242424] py-10 mt-16">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-sm text-white/70">
+    <footer className="mt-24 border-t border-white/10">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 text-sm sm:grid-cols-3 sm:px-6">
         <div>
-          <p className="font-display text-lg font-bold text-white">{EVENT_METADATA.name}</p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs sm:text-sm">
-            <MapPin className="h-4 w-4 text-[#D1AC3E] shrink-0" />
-            <span>
-              {EVENT_METADATA.venue} · {EVENT_METADATA.address}
-            </span>
+          <p className="font-serif text-lg text-white">
+            Sharad Utsav <span className="text-primary">2026</span>
+          </p>
+          <p className="mt-2 leading-relaxed text-white/60">
+            {EVENT_METADATA.venue}
+            <br />
+            {EVENT_METADATA.address}
           </p>
         </div>
-        <div className="text-xs text-white/55">
-          <p>Thu 10 Dec 2026 – Mon 14 Dec 2026 · All prices in USD</p>
-          <p className="mt-1">© 2026 Radha Krishna Temple of Dallas (Allen, TX)</p>
+        <div>
+          <p className="font-medium text-white">Festival</p>
+          <p className="mt-2 leading-relaxed text-white/60">
+            Thursday 10 – Monday 14 December 2026
+            <br />
+            Gates open at 5:00 pm each evening
+          </p>
         </div>
+        <div>
+          <p className="font-medium text-white">Questions</p>
+          <p className="mt-2 leading-relaxed text-white/60">
+            Visit the temple office, or ask any volunteer at the main gate during the festival.
+          </p>
+        </div>
+      </div>
+      <div className="border-t border-white/10">
+        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-white/45 sm:px-6">
+          © 2026 Radha Krishna Temple, Allen, Texas. All prices in US dollars.
+        </p>
       </div>
     </footer>
   );
