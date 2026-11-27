@@ -95,9 +95,9 @@ export function renderConfirmationEmail(
       </div>
       <div style="padding:24px;">
         <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">
-          Namaste <strong>${escapeHtml(input.bookerName)}</strong>, your festival passes are confirmed! Your boarding-pass style tickets and itemized invoice (${escapeHtml(input.invoiceNumber)}) are attached below.
+          Namaste <strong>${escapeHtml(input.bookerName)}</strong>, your festival passes are confirmed! Your festival passes and itemized invoice (${escapeHtml(input.invoiceNumber)}) are attached below.
         </p>
-        <h2 style="font-family:Georgia,serif;font-size:18px;color:#D1AC3E;margin:20px 0 10px;">Issued Boarding Passes (${input.passes.length})</h2>
+        <h2 style="font-family:Georgia,serif;font-size:18px;color:#D1AC3E;margin:20px 0 10px;">Issued Festival Passes (${input.passes.length})</h2>
         ${passCardsHtml}
         <div style="background:#FDF3E4;border-radius:10px;padding:16px;margin-top:18px;color:#291900;">
           <div style="font-weight:700;font-size:15px;margin-bottom:8px;">Payment Summary · Invoice ${escapeHtml(input.invoiceNumber)}</div>

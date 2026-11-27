@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Plane, QrCode } from "lucide-react";
+import { Download, QrCode } from "lucide-react";
 import type { IssuedPassDTO } from "@contract/index";
 import { EVENT_METADATA } from "@domain/index";
 import { getPassesPdfUrl } from "../../../api/endpoints";
@@ -23,33 +23,29 @@ export function BoardingPassTicket({
   return (
     <div className="space-y-3">
       <div className="relative overflow-hidden rounded-card border border-gold bg-cream text-heading">
-        {/* Airline-style boarding pass header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary bg-heading px-5 py-3.5 text-cream sm:px-6">
-          <div className="flex items-center gap-3">
-            <Plane
-              className="h-4 w-4 shrink-0 text-bright-gold"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-bright-gold">
-                {EVENT_METADATA.venue}
-              </p>
-              <h3 className="font-serif text-base text-cream sm:text-lg">
-                {EVENT_METADATA.name}
-              </h3>
-            </div>
+        {/* Festival pass header aligned with 8/4 perforated stub grid */}
+        <div className="grid grid-cols-1 border-b-2 border-primary bg-heading text-cream md:grid-cols-12">
+          <div className="flex items-center px-5 py-4 sm:px-6 md:col-span-8">
+            <h3 className="font-serif text-xl font-bold tracking-wide text-cream sm:text-2xl">
+              SHARAD UTSAV 2026
+            </h3>
           </div>
-          <div className="text-left sm:text-right">
-            <span className="block text-[10px] uppercase tracking-wider text-cream/60">
+
+          <div className="relative flex flex-col justify-center border-t border-dashed border-gold/70 px-5 py-3 text-left sm:px-6 md:col-span-4 md:border-t-0 md:border-l md:text-center">
+            <span
+              aria-hidden="true"
+              className="absolute -left-2.5 -top-2.5 hidden h-5 w-5 rounded-full border border-gold bg-primary-dark md:block"
+            />
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-bright-gold">
               Booking ref
             </span>
-            <span className="tabular font-mono text-sm font-semibold text-cream">
+            <span className="tabular mt-0.5 block font-mono text-sm font-bold text-cream">
               {reference}
             </span>
           </div>
         </div>
 
-        {/* Main passenger coupon + perforated gate stub */}
+        {/* Main passholder details + perforated gate stub */}
         <div className="relative grid grid-cols-1 md:grid-cols-12">
           <div className="space-y-4 p-5 sm:p-6 md:col-span-8">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -111,10 +107,6 @@ export function BoardingPassTicket({
 
           {/* Perforated tear-off stub */}
           <div className="relative flex flex-col items-center justify-center border-t border-dashed border-gold/80 p-5 text-center md:col-span-4 md:border-t-0 md:border-l">
-            <span
-              aria-hidden="true"
-              className="absolute -left-2.5 -top-2.5 hidden h-5 w-5 rounded-full border border-gold bg-primary-dark md:block"
-            />
             <span
               aria-hidden="true"
               className="absolute -bottom-2.5 -left-2.5 hidden h-5 w-5 rounded-full border border-gold bg-primary-dark md:block"

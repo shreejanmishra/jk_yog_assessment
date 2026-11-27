@@ -31,7 +31,7 @@ export function GuardianFields({
             </span>
           </h4>
           <p className="mt-1 text-xs leading-relaxed text-white/60">
-            Required for everyone under 18. Both details are printed on this attendee’s boarding
+            Required for everyone under 18. Both details are printed on this attendee’s festival
             pass for gate check-in.
           </p>
         </div>

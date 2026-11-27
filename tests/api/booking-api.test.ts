@@ -199,7 +199,7 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
     expect(workshop?.availability.remaining).toBe(2);
   });
 
-  it('handles double-click idempotency, generates Boarding Pass & Invoice PDFs, and stores simulated email with guardian details', async () => {
+  it('handles double-click idempotency, generates Festival Pass & Invoice PDFs, and stores simulated email with guardian details', async () => {
     const store = new InMemoryTransactionalStore();
     const { clock } = createMutableClock('2026-11-26T15:00:00Z');
     const app = createApp({ store, clock });
@@ -280,7 +280,7 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
     expect(pay2.status).toBe(200);
     expect(pay1.body.status).toBe('confirmed');
 
-    // Verify Boarding Pass PDF & Invoice PDF streams
+    // Verify Festival Pass PDF & Invoice PDF streams
     const passesPdf = await invokeApp(app, {
       method: 'GET',
       path: `/api/bookings/${bookingId}/passes.pdf`,
