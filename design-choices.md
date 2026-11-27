@@ -7,6 +7,7 @@
 - The page felt empty with just the event details so I have added mock sections like 'About us', 'Our Mission', ' Contribute to the Cause', a junk footer and mock 'Profile' drowdown.
 - I do not have my own DNS, so I have a simulated email output containing the pass and invoice as attachment.
 - I am not adding a refund workflow, date change for existing booking or an admin panel.
+- Expect slight latency with backend if the evaluator is situated in North America, since the DB server region is Singapore. 
 
 ## The Rules
 
