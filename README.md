@@ -1,6 +1,6 @@
 # Sharad Utsav 2026 — Festival Ticketing & Pass Portal
 
-**Live Production URL:** *(Pending Vercel link & `vercel --prod` deployment — see Deployment section below)*
+**Live Production URL:** [https://jk-yog-assessment.vercel.app](https://jk-yog-assessment.vercel.app)
 
 End-to-end festival booking application for **Sharad Utsav 2026** at **Radha Krishna Temple, Allen, Texas** (**Thu 10 Dec 2026 → Mon 14 Dec 2026**, USD).
 
@@ -101,10 +101,10 @@ All monetary values are integer cents (`USD`). Errors use a uniform envelope:
 4. **`FLAT20` Minimum Order (`> $40.00`) & `$0` Auto-Confirmation**: `FLAT20` requires a booking subtotal strictly over `$40.00` (`minSubtotalExclusiveCents = 4000`), preventing a `$15` single-day pass from applying a `$20` flat coupon (`PROMO_NOT_APPLICABLE`). Legitimate `$0` totals (such as `KIDSFREE` on a child-only booking or Under-5 passes) confirm immediately server-side without routing through a `$0` card charge.
 5. **`KIDSFREE` & Anti-Abuse Coupon Limit (1 per Booker & Attendee)**: `KIDSFREE` discounts `DAY_PASS_CHILD` and `ALL_DAY_CHILD` admission lines only and is rejected (`PROMO_NOT_APPLICABLE`) when no child pass exists in the booking. Across all bookings, coupon usage is capped at **1 promotional discount per booker and per attendee** (`PROMO_ALREADY_USED`), so neither the original booker nor any attendee from a discounted booking can return later (as a booker or attendee, with new companions or a different promo code) to stack another coupon.
 6. **Unique Passholder & Minor Guardian Safeguards**: Adults and `12–17` minors are deduplicated by normalized phone number, while Children (`5–11`) and Under-5s (`0–4`) are deduplicated by `(guardian phone + child full name)` so a parent can book multiple siblings under one guardian number without allowing duplicate passes for the same child. Minors (`< 18`) also cannot list their own name/phone (or another minor in the booking) as their guardian (`GUARDIAN_SELF_MATCH`).
-6. **Family Pass (`$40`) vs Separate Passes**: Rather than silently mutating a family's selection, the UI offers a 1-click `$40` Family Pass bundle when 2 adults + 2 children share a day (saving `$6`), and surfaces a non-blocking `CHEAPER_OPTION_AVAILABLE` warning when separate passes (`2A + 1C = $38`) or a Child All-Day Pass (`$30` vs `4 × $8 = $32`) cost less.
-7. **Shared 5-Day Stock Pools + Expiring 10-Minute Holds**: Day passes draw from the shared 5-day unit pool (`380` adult day-pass person-days). Checkout places an atomic 10-minute hold; abandoned holds are lazily released before every stock transaction (plus a daily cron backstop) so abandoned tabs cannot permanently lock the last 2 Garba Workshop seats.
-8. **No Mandatory Login Wall**: Browsing and booking work immediately as a guest (satisfying the brief's zero-login-prompt rule), while optional demo/email-OTP sign-in unlocks the Profile dropdown and links bookings made with that email.
-9. **Brand Colour Contrast**: Primary `#C99B24` gold buttons use `#2C2C2C` dark text (`5.4:1` AA) instead of white (`2.6:1`), and `#EF1F1F` renders validation exclamation icons/borders paired with `#FF7A7A` (`5.5:1`) error text on dark surfaces.
+7. **Family Pass (`$40`) vs Separate Passes**: Rather than silently mutating a family's selection, the UI offers a 1-click `$40` Family Pass bundle when 2 adults + 2 children share a day (saving `$6`), and surfaces a non-blocking `CHEAPER_OPTION_AVAILABLE` warning when separate passes (`2A + 1C = $38`) or a Child All-Day Pass (`$30` vs `4 × $8 = $32`) cost less.
+8. **Shared 5-Day Stock Pools + Expiring 10-Minute Holds**: Day passes draw from the shared 5-day unit pool (`380` adult day-pass person-days). Checkout places an atomic 10-minute hold; abandoned holds are lazily released before every stock transaction (plus a daily cron backstop) so abandoned tabs cannot permanently lock the last 2 Garba Workshop seats.
+9. **No Mandatory Login Wall**: Browsing and booking work immediately as a guest (satisfying the brief's zero-login-prompt rule), while optional demo/email-OTP sign-in unlocks the Profile dropdown and links bookings made with that email.
+10. **Brand Colour Contrast**: Primary `#C99B24` gold buttons use `#2C2C2C` dark text (`5.4:1` AA) instead of white (`2.6:1`), and `#EF1F1F` renders validation exclamation icons/borders paired with `#FF7A7A` (`5.5:1`) error text on dark surfaces.
 
 ---
 
