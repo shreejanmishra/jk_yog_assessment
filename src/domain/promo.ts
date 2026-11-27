@@ -18,11 +18,19 @@ export interface PromoDefinition {
   readonly discountType: PromoDiscountType;
   readonly percentBps: number | null;
   readonly amountCents: Cents | null;
+  /** Booking subtotal must be strictly greater than this threshold (e.g. > $40.00 for FLAT20). */
+  readonly minSubtotalExclusiveCents: Cents | null;
   readonly validFromIso: string | null;
   readonly validUntilIso: string | null;
   readonly maxUses: number | null;
   readonly usedCount: number;
   readonly isActive: boolean;
+}
+
+export interface PriorPromoRedemptionMatch {
+  readonly participantLabel: string;
+  readonly bookingReference: string;
+  readonly promoCode: string;
 }
 
 export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
@@ -32,6 +40,7 @@ export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
     discountType: 'percent',
     percentBps: 1000,
     amountCents: null,
+    minSubtotalExclusiveCents: null,
     validFromIso: '2026-01-01T00:00:00Z',
     validUntilIso: '2026-12-15T05:59:59Z',
     maxUses: null,
@@ -40,10 +49,11 @@ export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
   },
   {
     code: 'FLAT20',
-    description: '$20 off the entire booking',
+    description: '$20 off bookings over $40',
     discountType: 'fixed',
     percentBps: null,
     amountCents: cents(2000),
+    minSubtotalExclusiveCents: cents(4000),
     validFromIso: '2026-01-01T00:00:00Z',
     validUntilIso: '2026-12-15T05:59:59Z',
     maxUses: null,
@@ -56,6 +66,7 @@ export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
     discountType: 'child_admissions_free',
     percentBps: null,
     amountCents: null,
+    minSubtotalExclusiveCents: null,
     validFromIso: '2026-01-01T00:00:00Z',
     validUntilIso: '2026-12-15T05:59:59Z',
     maxUses: null,
@@ -68,6 +79,7 @@ export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
     discountType: 'percent',
     percentBps: 500,
     amountCents: null,
+    minSubtotalExclusiveCents: null,
     validFromIso: '2026-09-01T00:00:00Z',
     validUntilIso: '2026-11-15T23:59:59Z',
     maxUses: null,
@@ -80,6 +92,7 @@ export const DEFAULT_PROMOS: readonly PromoDefinition[] = [
     discountType: 'fixed',
     percentBps: null,
     amountCents: cents(1000),
+    minSubtotalExclusiveCents: null,
     validFromIso: '2026-01-01T00:00:00Z',
     validUntilIso: '2026-12-15T05:59:59Z',
     maxUses: 50,
@@ -115,7 +128,11 @@ export type PromoEvaluation =
       readonly message: string;
       readonly rejectionCode: Extract<
         RuleViolationCode,
-        'PROMO_NOT_FOUND' | 'PROMO_EXPIRED' | 'PROMO_EXHAUSTED' | 'PROMO_NOT_APPLICABLE'
+        | 'PROMO_NOT_FOUND'
+        | 'PROMO_EXPIRED'
+        | 'PROMO_EXHAUSTED'
+        | 'PROMO_NOT_APPLICABLE'
+        | 'PROMO_ALREADY_USED'
       >;
     };
 
@@ -129,6 +146,7 @@ export function evaluatePromoCode(params: {
   lines: readonly PricedLineForPromo[];
   subtotalCents: Cents;
   nowIso: string;
+  priorRedemption?: PriorPromoRedemptionMatch | null;
 }): PromoEvaluation {
   const code = normalizePromoCode(params.rawCode);
   if (!code) {
@@ -170,6 +188,31 @@ export function evaluatePromoCode(params: {
       discountCents: ZERO_CENTS,
       message: `Code "${promo.code}" has already reached its maximum usage limit (${promo.maxUses} uses).`,
       rejectionCode: 'PROMO_EXHAUSTED',
+    };
+  }
+
+  // 1-coupon-per-booker-and-attendee anti-abuse rule across all bookings
+  if (params.priorRedemption) {
+    return {
+      status: 'rejected',
+      code: promo.code,
+      discountCents: ZERO_CENTS,
+      message: `Coupon limit reached: ${params.priorRedemption.participantLabel} already benefited from promo code ${params.priorRedemption.promoCode} on booking ${params.priorRedemption.bookingReference}. Coupons are limited to 1 per booker and attendee.`,
+      rejectionCode: 'PROMO_ALREADY_USED',
+    };
+  }
+
+  // Minimum subtotal threshold (e.g. FLAT20 requires subtotal strictly greater than $40.00)
+  if (
+    promo.minSubtotalExclusiveCents !== null &&
+    params.subtotalCents <= promo.minSubtotalExclusiveCents
+  ) {
+    return {
+      status: 'rejected',
+      code: promo.code,
+      discountCents: ZERO_CENTS,
+      message: `${promo.code} is only applicable when your booking subtotal is more than ${formatUSD(promo.minSubtotalExclusiveCents)} (current subtotal is ${formatUSD(params.subtotalCents)}).`,
+      rejectionCode: 'PROMO_NOT_APPLICABLE',
     };
   }
 
@@ -218,7 +261,7 @@ export function evaluatePromoCode(params: {
           code: promo.code,
           discountCents: ZERO_CENTS,
           message:
-            'KIDSFREE applies only to individual Child Day or Child All-Day passes (ages 5–11). Add a child pass to use this code.',
+            'KIDSFREE is not applicable because there are no Child (ages 5–11) Day or All-Day passes in this booking.',
           rejectionCode: 'PROMO_NOT_APPLICABLE',
         };
       }

@@ -4,6 +4,7 @@ import type {
   ApiErrorEnvelopeDTO,
   CreateBookingResponseDTO,
   EventCatalogResponseDTO,
+  QuoteResponseDTO,
   SimulatedEmailResponseDTO,
   SimulatePaymentResponseDTO,
 } from '@contract/index';
@@ -86,7 +87,7 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
           booker: {
             fullName: `Buyer ${idx}`,
             email: `buyer${idx}@example.com`,
-            phone: '+1 469-555-0155',
+            phone: `+1 469-555-10${String(idx).padStart(2, '0')}`,
             age: 35,
             isAttending: true,
           },
@@ -96,7 +97,7 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
               isBooker: true,
               selectedCategory: 'adult',
               fullName: `Buyer ${idx}`,
-              phone: '+1 469-555-0155',
+              phone: `+1 469-555-10${String(idx).padStart(2, '0')}`,
               age: 35,
               passKind: 'day_pass',
               days: ['2026-12-11'],
@@ -107,7 +108,7 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
               isBooker: false,
               selectedCategory: 'adult',
               fullName: `Spouse ${idx}`,
-              phone: '+1 469-555-0156',
+              phone: `+1 469-555-20${String(idx).padStart(2, '0')}`,
               age: 33,
               passKind: 'day_pass',
               days: ['2026-12-11'],
@@ -306,5 +307,263 @@ describe('Express 5 API — server authority, concurrency, PDFs, and simulated e
     expect(emailRes.body.htmlBody).toContain('Arjun Nair');
     expect(emailRes.body.htmlBody).toContain('Meera Nair');
     expect(emailRes.body.attachments).toHaveLength(2);
+  });
+
+  it('blocks booking a duplicate pass for the same individual on an overlapping festival evening across separate bookings (409 DUPLICATE_PASS_HOLDER)', async () => {
+    const store = new InMemoryTransactionalStore();
+    const { clock } = createMutableClock('2026-11-26T15:00:00Z');
+    const app = createApp({ store, clock });
+
+    const firstBooking = await invokeApp<CreateBookingResponseDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `dup-check-1-${crypto.randomUUID()}` },
+      body: {
+        mode: 'group',
+        booker: {
+          fullName: 'Kiran Desai',
+          email: 'kiran@example.com',
+          phone: '+1 469-555-0310',
+          age: 37,
+          isAttending: true,
+        },
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Kiran Desai',
+            phone: '+1 469-555-0310',
+            age: 37,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+          {
+            clientId: 'c1',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Neha Desai',
+            age: 8,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Kiran Desai', phone: '+1 469-555-0310' },
+          },
+        ],
+        familyGroups: [],
+        paymentMethod: 'card',
+        expectedTotalCents: 2300,
+      },
+    });
+    expect(firstBooking.status).toBe(201);
+
+    // Same child + guardian phone on the SAME evening -> 409 DUPLICATE_PASS_HOLDER
+    const duplicateChildBooking = await invokeApp<ApiErrorEnvelopeDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `dup-check-2-${crypto.randomUUID()}` },
+      body: {
+        mode: 'group',
+        booker: {
+          fullName: 'Kiran Desai',
+          email: 'kiran@example.com',
+          phone: '+1 469-555-0310',
+          age: 37,
+          isAttending: false,
+        },
+        attendees: [
+          {
+            clientId: 'c1',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Neha Desai',
+            age: 8,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Kiran Desai', phone: '469-555-0310' },
+          },
+        ],
+        familyGroups: [],
+        paymentMethod: 'card',
+        expectedTotalCents: 800,
+      },
+    });
+    expect(duplicateChildBooking.status).toBe(409);
+    expect(duplicateChildBooking.body.error.code).toBe('DUPLICATE_PASS_HOLDER');
+
+    // Different sibling ("Rohan Desai") under the SAME guardian phone on the SAME evening -> 201 ALLOWED
+    const siblingBooking = await invokeApp<CreateBookingResponseDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `dup-check-3-${crypto.randomUUID()}` },
+      body: {
+        mode: 'group',
+        booker: {
+          fullName: 'Kiran Desai',
+          email: 'kiran@example.com',
+          phone: '+1 469-555-0310',
+          age: 37,
+          isAttending: false,
+        },
+        attendees: [
+          {
+            clientId: 'c2',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Rohan Desai',
+            age: 6,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Kiran Desai', phone: '+1 469-555-0310' },
+          },
+        ],
+        familyGroups: [],
+        paymentMethod: 'card',
+        expectedTotalCents: 800,
+      },
+    });
+    expect(siblingBooking.status).toBe(201);
+  });
+
+  it('prevents coupon abuse: limits coupon usage to 1 per booker and every attendee across bookings (even with a different code or new companions)', async () => {
+    const store = new InMemoryTransactionalStore();
+    const { clock } = createMutableClock('2026-11-26T15:00:00Z');
+    const app = createApp({ store, clock });
+
+    // Booking #1: Person A (+1 469-555-0401) books for 2 people [Person A, Person B (+1 469-555-0402)] on Thu Dec 10 with SEVA10 ($30 - $3 = $27)
+    const booking1 = await invokeApp<CreateBookingResponseDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `coupon-abuse-1-${crypto.randomUUID()}` },
+      body: {
+        mode: 'group',
+        booker: {
+          fullName: 'Person A',
+          email: 'persona@example.com',
+          phone: '+1 469-555-0401',
+          age: 30,
+          isAttending: true,
+        },
+        attendees: [
+          {
+            clientId: 'p-a',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Person A',
+            phone: '+1 469-555-0401',
+            age: 30,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+          {
+            clientId: 'p-b',
+            isBooker: false,
+            selectedCategory: 'adult',
+            fullName: 'Person B',
+            phone: '+1 469-555-0402',
+            age: 28,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+        ],
+        familyGroups: [],
+        promoCode: 'SEVA10',
+        paymentMethod: 'card',
+        expectedTotalCents: 2700,
+      },
+    });
+    expect(booking1.status).toBe(201);
+
+    // Confirm payment on Booking #1
+    await invokeApp<SimulatePaymentResponseDTO>(app, {
+      method: 'POST',
+      path: `/api/bookings/${booking1.body.bookingId}/simulate-pay`,
+      body: { outcome: 'success', method: 'card', cardLast4: '4242' },
+    });
+
+    // Booking #2 attempt: Person B (previously an attendee on Booking #1!) comes back as Booker
+    // for 2 new individuals [Person C, Person D] on Sat Dec 12 ($54 subtotal > $40) and tries FLAT20!
+    const secondPayloadWithCoupon = {
+      mode: 'group',
+      booker: {
+        fullName: 'Person B',
+        email: 'personb@example.com',
+        phone: '469-555-0402',
+        age: 28,
+        isAttending: false,
+      },
+      attendees: [
+        {
+          clientId: 'p-c',
+          isBooker: false,
+          selectedCategory: 'adult',
+          fullName: 'Person C',
+          phone: '+1 469-555-0403',
+          age: 29,
+          passKind: 'day_pass',
+          days: ['2026-12-12'],
+          extras: { dandiyaPairs: 0, dinnerDates: ['2026-12-12'], workshopDates: [] },
+        },
+        {
+          clientId: 'p-d',
+          isBooker: false,
+          selectedCategory: 'adult',
+          fullName: 'Person D',
+          phone: '+1 469-555-0404',
+          age: 31,
+          passKind: 'day_pass',
+          days: ['2026-12-12'],
+          extras: { dandiyaPairs: 0, dinnerDates: ['2026-12-12'], workshopDates: [] },
+        },
+      ],
+      familyGroups: [],
+      promoCode: 'FLAT20',
+    };
+
+    // 1) /api/quote immediately flags promo as rejected with PROMO_ALREADY_USED
+    const quoteRes = await invokeApp<QuoteResponseDTO>(app, {
+      method: 'POST',
+      path: '/api/quote',
+      body: secondPayloadWithCoupon,
+    });
+    expect(quoteRes.status).toBe(200);
+    expect(quoteRes.body.promo.status).toBe('rejected');
+    expect(quoteRes.body.promo.rejectionCode).toBe('PROMO_ALREADY_USED');
+    expect(quoteRes.body.totalCents).toBe(5400);
+
+    // 2) /api/bookings strictly blocks submitting with that coupon (422 PROMO_ALREADY_USED)
+    const blockedBooking = await invokeApp<ApiErrorEnvelopeDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `coupon-abuse-2-${crypto.randomUUID()}` },
+      body: {
+        ...secondPayloadWithCoupon,
+        paymentMethod: 'card',
+        expectedTotalCents: 3400,
+      },
+    });
+    expect(blockedBooking.status).toBe(422);
+    expect(blockedBooking.body.error.issues?.some((i) => i.code === 'PROMO_ALREADY_USED')).toBe(
+      true,
+    );
+
+    // 3) Without a coupon, Person B CAN still book for Person C & Person D at standard price ($54.00)
+    const regularPriceBooking = await invokeApp<CreateBookingResponseDTO>(app, {
+      method: 'POST',
+      path: '/api/bookings',
+      headers: { 'Idempotency-Key': `coupon-abuse-3-${crypto.randomUUID()}` },
+      body: {
+        ...secondPayloadWithCoupon,
+        promoCode: undefined,
+        paymentMethod: 'card',
+        expectedTotalCents: 5400,
+      },
+    });
+    expect(regularPriceBooking.status).toBe(201);
   });
 });

@@ -58,4 +58,38 @@ describe('Zustand booking transitions — keeping attendees and tickets synced',
     expect(asInfant.extras.workshopDates).toEqual([]);
     expect(asInfant.extras.dinnerDates).toEqual(['2026-12-10', '2026-12-11']);
   });
+
+  it('appends non-booker attendees in Group mode via useBookingStore.addAttendee while preserving lead booker', async () => {
+    const { useBookingStore } = await import('@web/features/booking/store/booking-store');
+    useBookingStore.getState().resetDraftAfterCompletion();
+    useBookingStore.getState().setMode('group');
+    useBookingStore.getState().patchBooker({
+      fullName: 'Ramesh Sharma',
+      email: 'ramesh@example.com',
+      phone: '+1 469-555-0192',
+      ageInput: '36',
+      isAttending: true,
+    });
+
+    useBookingStore.getState().addAttendee({
+      clientId: 'att-child-1',
+      isBooker: false,
+      selectedCategory: 'child',
+      fullName: 'Aarav Sharma',
+      email: '',
+      phone: '',
+      ageInput: '8',
+      passKind: 'day_pass',
+      days: ['2026-12-10'],
+      extras: { dandiyaPairs: 1, dinnerDates: [], workshopDates: [] },
+      guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+    });
+
+    const { draft } = useBookingStore.getState();
+    expect(draft.mode).toBe('group');
+    expect(draft.attendees).toHaveLength(2);
+    expect(draft.attendees[0]?.isBooker).toBe(true);
+    expect(draft.attendees[1]?.fullName).toBe('Aarav Sharma');
+    expect(draft.attendees[1]?.isBooker).toBe(false);
+  });
 });

@@ -24,6 +24,8 @@ export interface PricedLineItem {
 export interface AttendeePassSummary {
   readonly clientId: string;
   readonly fullName: string;
+  readonly email: string | null;
+  readonly phone: string | null;
   readonly age: number;
   readonly ageBand: AgeBand;
   readonly requiresGuardian: boolean;
@@ -214,6 +216,8 @@ export function expandAndPriceItems(
     attendeePasses.push({
       clientId: attendee.clientId,
       fullName: attendee.fullName.trim(),
+      email: attendee.email?.trim() ? attendee.email.trim() : null,
+      phone: attendee.phone?.trim() ? attendee.phone.trim() : null,
       age: attendee.age,
       ageBand: band,
       requiresGuardian: minor,

@@ -6,7 +6,11 @@ import {
 import type { BookingIntent } from '../booking-types';
 import { EVENT_METADATA } from '../catalog';
 import type { RuleViolation } from '../errors';
-import { isValidEmail, isValidPhone } from './contact-validation';
+import {
+  computeAttendeeIdentityKey,
+  isValidEmail,
+  isValidPhone,
+} from './contact-validation';
 
 export function checkAttendeeRules(intent: BookingIntent): RuleViolation[] {
   const violations: RuleViolation[] = [];
@@ -34,7 +38,8 @@ export function checkAttendeeRules(intent: BookingIntent): RuleViolation[] {
       violations.push({
         code: 'INDIVIDUAL_MODE_COUNT',
         path: 'mode',
-        message: 'Individual booking covers only the primary booker. Switch to Group Booking to add others.',
+        message:
+          'Individual booking covers only the primary booker. Switch to Group Booking to add others.',
       });
     } else if (isValidAgeInteger(booker.age) && attendees[0].age !== booker.age) {
       violations.push({
@@ -44,6 +49,8 @@ export function checkAttendeeRules(intent: BookingIntent): RuleViolation[] {
       });
     }
   }
+
+  const seenIdentityKeys = new Map<string, { index: number; fullName: string }>();
 
   attendees.forEach((attendee, index) => {
     const basePath = `attendees[${index}]`;
@@ -98,6 +105,37 @@ export function checkAttendeeRules(intent: BookingIntent): RuleViolation[] {
         path: `${basePath}.email`,
         message: 'Please enter a valid email address.',
       });
+    }
+
+    const identityKey = computeAttendeeIdentityKey({
+      category: attendee.selectedCategory,
+      fullName: attendee.fullName,
+      phone: attendee.phone,
+      guardianPhone: attendee.guardian?.phone,
+    });
+
+    if (identityKey !== null) {
+      const existing = seenIdentityKeys.get(identityKey);
+      if (existing) {
+        if (attendee.selectedCategory === 'adult') {
+          violations.push({
+            code: 'DUPLICATE_ATTENDEE',
+            path: `${basePath}.phone`,
+            message: `Duplicate passholder: phone number matches ${existing.fullName || `Attendee ${existing.index + 1}`}. Each adult or minor (12+) passholder must have a unique phone number.`,
+          });
+        } else {
+          violations.push({
+            code: 'DUPLICATE_ATTENDEE',
+            path: `${basePath}.fullName`,
+            message: `Duplicate passholder: "${attendee.fullName.trim()}" is already included under guardian phone ${attendee.guardian?.phone.trim() ?? ''}.`,
+          });
+        }
+      } else {
+        seenIdentityKeys.set(identityKey, {
+          index,
+          fullName: attendee.fullName.trim(),
+        });
+      }
     }
   });
 

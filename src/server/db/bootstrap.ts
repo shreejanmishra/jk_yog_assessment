@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   discount_type promo_discount_type NOT NULL,
   percent_bps INTEGER,
   amount_cents INTEGER,
+  min_subtotal_exclusive_cents INTEGER,
   valid_from_iso TEXT,
   valid_until_iso TEXT,
   max_uses INTEGER,
@@ -192,6 +193,7 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   UNIQUE (event_id, code),
   CONSTRAINT promo_codes_usage_bounds CHECK (used_count >= 0 AND (max_uses IS NULL OR used_count <= max_uses))
 );
+ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS min_subtotal_exclusive_cents INTEGER;
 
 CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -243,7 +245,9 @@ CREATE TABLE IF NOT EXISTS attendees (
   CONSTRAINT attendees_minor_guardian_required CHECK (
     age >= 18 OR (
       guardian_name IS NOT NULL AND length(trim(guardian_name)) >= 2 AND
-      guardian_phone IS NOT NULL AND length(trim(guardian_phone)) >= 7
+      guardian_phone IS NOT NULL AND length(trim(guardian_phone)) >= 7 AND
+      lower(regexp_replace(trim(guardian_name), '[[:space:]]+', ' ', 'g')) <> lower(regexp_replace(trim(full_name), '[[:space:]]+', ' ', 'g')) AND
+      (phone IS NULL OR regexp_replace(guardian_phone, '[^0-9]', '', 'g') <> regexp_replace(phone, '[^0-9]', '', 'g'))
     )
   )
 );
@@ -406,10 +410,12 @@ export async function seedDatabase(
         await client.query(
           `INSERT INTO promo_codes (
              event_id, code, description, discount_type, percent_bps, amount_cents,
-             valid_from_iso, valid_until_iso, max_uses, used_count, is_active
+             min_subtotal_exclusive_cents, valid_from_iso, valid_until_iso, max_uses, used_count, is_active
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
            ON CONFLICT (event_id, code) DO UPDATE SET
+             description = EXCLUDED.description,
+             min_subtotal_exclusive_cents = EXCLUDED.min_subtotal_exclusive_cents,
              used_count = EXCLUDED.used_count,
              max_uses = EXCLUDED.max_uses,
              valid_until_iso = EXCLUDED.valid_until_iso,
@@ -421,6 +427,7 @@ export async function seedDatabase(
             promo.discountType,
             promo.percentBps,
             promo.amountCents,
+            promo.minSubtotalExclusiveCents,
             promo.validFromIso,
             promo.validUntilIso,
             promo.maxUses,
@@ -432,10 +439,12 @@ export async function seedDatabase(
         await client.query(
           `INSERT INTO promo_codes (
              event_id, code, description, discount_type, percent_bps, amount_cents,
-             valid_from_iso, valid_until_iso, max_uses, used_count, is_active
+             min_subtotal_exclusive_cents, valid_from_iso, valid_until_iso, max_uses, used_count, is_active
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-           ON CONFLICT (event_id, code) DO NOTHING`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           ON CONFLICT (event_id, code) DO UPDATE SET
+             description = EXCLUDED.description,
+             min_subtotal_exclusive_cents = EXCLUDED.min_subtotal_exclusive_cents`,
           [
             eventId,
             promo.code,
@@ -443,6 +452,7 @@ export async function seedDatabase(
             promo.discountType,
             promo.percentBps,
             promo.amountCents,
+            promo.minSubtotalExclusiveCents,
             promo.validFromIso,
             promo.validUntilIso,
             promo.maxUses,

@@ -19,18 +19,27 @@ export function hasDatabaseUrl(): boolean {
   return Boolean(url && !url.includes('ep-example'));
 }
 
+function normalizeConnectionString(raw: string): string {
+  // Explicitly promote `sslmode=require` to `sslmode=verify-full` unless `uselibpqcompat` is set,
+  // preserving full TLS certificate + hostname verification and avoiding pg-connection-string warnings.
+  if (raw.includes('sslmode=require') && !raw.includes('uselibpqcompat=')) {
+    return raw.replace('sslmode=require', 'sslmode=verify-full');
+  }
+  return raw;
+}
+
 export function getPool(): pg.Pool {
   if (!poolInstance) {
-    const connectionString = process.env.DATABASE_URL?.trim();
-    if (!connectionString) {
+    const rawUrl = process.env.DATABASE_URL?.trim();
+    if (!rawUrl) {
       throw new Error('DATABASE_URL environment variable is not configured.');
     }
+    const connectionString = normalizeConnectionString(rawUrl);
     poolInstance = new Pool({
       connectionString,
       max: 10,
       idleTimeoutMillis: 15_000,
       connectionTimeoutMillis: 10_000,
-      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
     });
     attachDatabasePool(poolInstance);
   }

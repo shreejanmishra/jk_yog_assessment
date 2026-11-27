@@ -193,6 +193,7 @@ export const promoCodes = pgTable(
     discountType: promoDiscountTypeEnum('discount_type').notNull(),
     percentBps: integer('percent_bps'),
     amountCents: integer('amount_cents'),
+    minSubtotalExclusiveCents: integer('min_subtotal_exclusive_cents'),
     validFromIso: text('valid_from_iso'),
     validUntilIso: text('valid_until_iso'),
     maxUses: integer('max_uses'),
@@ -280,7 +281,7 @@ export const attendees = pgTable(
     check('attendees_age_range', sql`${t.age} >= 0 AND ${t.age} <= 120`),
     check(
       'attendees_minor_guardian_required',
-      sql`${t.age} >= 18 OR (${t.guardianName} IS NOT NULL AND length(trim(${t.guardianName})) >= 2 AND ${t.guardianPhone} IS NOT NULL AND length(trim(${t.guardianPhone})) >= 7)`,
+      sql`${t.age} >= 18 OR (${t.guardianName} IS NOT NULL AND length(trim(${t.guardianName})) >= 2 AND ${t.guardianPhone} IS NOT NULL AND length(trim(${t.guardianPhone})) >= 7 AND lower(regexp_replace(trim(${t.guardianName}), '[[:space:]]+', ' ', 'g')) <> lower(regexp_replace(trim(${t.fullName}), '[[:space:]]+', ' ', 'g')) AND (${t.phone} IS NULL OR regexp_replace(${t.guardianPhone}, '[^0-9]', '', 'g') <> regexp_replace(${t.phone}, '[^0-9]', '', 'g')))`,
     ),
   ],
 );

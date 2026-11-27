@@ -10,15 +10,20 @@ import type {
   UserProfileDTO,
 } from '@contract/index';
 import {
+  collectPromoParticipants,
+  computeAttendeeIdentityKey,
   DEFAULT_CATALOG,
   DEFAULT_PROMOS,
   EVENT_METADATA,
+  formatDatesDisplay,
   normalizeEmail,
   type BookingMode,
   type CatalogProduct,
   type PaymentMethodChoice,
+  type PriorPromoRedemptionMatch,
   type ProductCode,
   type PromoDefinition,
+  type PromoParticipant,
 } from '@domain/index';
 import { DEMO_PROFILE, SEEDED_CONTRIBUTIONS } from '../db/bootstrap';
 import { renderConfirmationEmail } from '../email/confirmation-template';
@@ -63,6 +68,12 @@ interface MemoryBookingRecord {
   createdAt: Date;
   confirmedAt: Date | null;
   stockDemand: Map<ProductCode, number>;
+  attendeeIdentities: Array<{
+    fullName: string;
+    identityKey: string;
+    validDates: string[];
+  }>;
+  promoParticipantKeys: Set<string>;
   lines: QuoteLineDTO[];
   passes: IssuedPassDTO[];
   invoice: BookingDetailResponseDTO['invoice'];
@@ -182,6 +193,42 @@ export class InMemoryTransactionalStore implements BookingDataStore {
     return this.withLock(async () => this.releaseExpiredInternal(now));
   }
 
+  private lookupPriorPromoRedemptionInternal(
+    participants: readonly PromoParticipant[],
+    now: Date,
+  ): PriorPromoRedemptionMatch | null {
+    if (participants.length === 0) return null;
+    for (const rec of this.bookings.values()) {
+      if (!rec.promoCode) continue;
+      if (
+        rec.status !== 'confirmed' &&
+        !(rec.status === 'pending_payment' && rec.holdExpiresAt > now)
+      ) {
+        continue;
+      }
+      for (const participant of participants) {
+        if (rec.promoParticipantKeys.has(participant.key)) {
+          return {
+            participantLabel: participant.label,
+            bookingReference: rec.reference,
+            promoCode: rec.promoCode,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  async findPriorPromoRedemption(
+    participants: readonly PromoParticipant[],
+    now: Date,
+  ): Promise<PriorPromoRedemptionMatch | null> {
+    return this.withLock(async () => {
+      this.releaseExpiredInternal(now);
+      return this.lookupPriorPromoRedemptionInternal(participants, now);
+    });
+  }
+
   async createBookingHold(input: CreateHoldInput): Promise<CreateBookingResponseDTO> {
     return this.withLock(async () => {
       const existingId = this.bookingIdByIdempotency.get(input.idempotencyKey);
@@ -223,6 +270,40 @@ export class InMemoryTransactionalStore implements BookingDataStore {
 
       this.releaseExpiredInternal(input.now);
 
+      // Prevent issuing duplicate passes to the same individual on overlapping festival evenings
+      for (const pass of input.quote.attendeePasses) {
+        const incomingKey = computeAttendeeIdentityKey({
+          category: pass.ageBand,
+          fullName: pass.fullName,
+          phone: pass.phone,
+          guardianPhone: pass.guardian?.phone ?? null,
+        });
+        if (!incomingKey) continue;
+
+        for (const existingRec of this.bookings.values()) {
+          if (existingRec.status !== 'confirmed' && existingRec.status !== 'pending_payment') {
+            continue;
+          }
+          for (const holder of existingRec.attendeeIdentities) {
+            if (holder.identityKey !== incomingKey) continue;
+            const overlap = pass.validDates.filter((d) => holder.validDates.includes(d));
+            if (overlap.length > 0) {
+              throw new ConflictError(
+                'DUPLICATE_PASS_HOLDER',
+                `${pass.fullName} already holds an active or confirmed pass for ${formatDatesDisplay(overlap)} (Ref ${existingRec.reference}).`,
+                [
+                  {
+                    path: 'attendees',
+                    code: 'DUPLICATE_ATTENDEE',
+                    message: `${pass.fullName} already holds a pass for ${formatDatesDisplay(overlap)}.`,
+                  },
+                ],
+              );
+            }
+          }
+        }
+      }
+
       // Verify stock atomically before mutating
       for (const [code, qty] of input.quote.stockDemand.entries()) {
         if (qty <= 0) continue;
@@ -246,8 +327,37 @@ export class InMemoryTransactionalStore implements BookingDataStore {
         }
       }
 
+      const currentPromoParticipants = collectPromoParticipants({
+        booker: input.booker,
+        attendees: input.quote.attendeePasses.map((p) => ({
+          category: p.ageBand,
+          fullName: p.fullName,
+          email: p.email,
+          phone: p.phone,
+          guardianPhone: p.guardian?.phone ?? null,
+        })),
+      });
+
       let appliedPromoCode: string | null = null;
       if (input.quote.promo.status === 'applied') {
+        const priorRedemption = this.lookupPriorPromoRedemptionInternal(
+          currentPromoParticipants,
+          input.now,
+        );
+        if (priorRedemption) {
+          throw new ConflictError(
+            'PROMO_ALREADY_USED',
+            `Coupon limit reached: ${priorRedemption.participantLabel} already benefited from promo code ${priorRedemption.promoCode} on booking ${priorRedemption.bookingReference}. Coupons are limited to 1 per booker and attendee.`,
+            [
+              {
+                path: 'promoCode',
+                code: 'PROMO_ALREADY_USED',
+                message: `${priorRedemption.participantLabel} already used promo code ${priorRedemption.promoCode} on booking ${priorRedemption.bookingReference}.`,
+              },
+            ],
+          );
+        }
+
         const promo = this.promos.get(input.quote.promo.code);
         if (
           !promo ||
@@ -385,6 +495,20 @@ export class InMemoryTransactionalStore implements BookingDataStore {
         createdAt: input.now,
         confirmedAt: autoConfirm ? input.now : null,
         stockDemand: new Map(input.quote.stockDemand),
+        attendeeIdentities: input.quote.attendeePasses
+          .map((p) => {
+            const identityKey = computeAttendeeIdentityKey({
+              category: p.ageBand,
+              fullName: p.fullName,
+              phone: p.phone,
+              guardianPhone: p.guardian?.phone ?? null,
+            });
+            return identityKey
+              ? { fullName: p.fullName, identityKey, validDates: [...p.validDates] }
+              : null;
+          })
+          .filter((item): item is NonNullable<typeof item> => item !== null),
+        promoParticipantKeys: new Set(currentPromoParticipants.map((p) => p.key)),
         lines,
         passes,
         invoice,

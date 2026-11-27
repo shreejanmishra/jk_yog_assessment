@@ -15,6 +15,7 @@ import {
 } from './pricing';
 import {
   evaluatePromoCode,
+  type PriorPromoRedemptionMatch,
   type PromoDefinition,
   type PromoEvaluation,
 } from './promo';
@@ -118,6 +119,7 @@ export function calculateBookingQuote(params: {
   nowIso: string;
   todayIsoDate: string;
   strictPromo: boolean;
+  priorPromoRedemption?: PriorPromoRedemptionMatch | null;
 }): QuoteCalculationResult {
   const catalogMap = buildCatalogMap(params.products);
 
@@ -147,6 +149,7 @@ export function calculateBookingQuote(params: {
     lines: expanded.lines,
     subtotalCents: expanded.subtotalCents,
     nowIso: params.nowIso,
+    priorRedemption: params.priorPromoRedemption,
   });
 
   if (params.strictPromo && promo.status === 'rejected') {

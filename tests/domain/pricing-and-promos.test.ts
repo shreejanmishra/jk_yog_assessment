@@ -77,29 +77,92 @@ describe('domain/pricing, stock & promo codes', () => {
     }
   });
 
-  it('clamps FLAT20 on a $15 single-day adult pass to $0.00 total', () => {
-    const intent: BookingIntent = {
-      mode: 'individual',
-      booker: BOOKER,
-      attendees: [
-        {
-          clientId: 'a1',
-          isBooker: true,
-          selectedCategory: 'adult',
-          fullName: 'Anita Patel',
-          phone: '+1 972-555-0144',
-          age: 38,
-          passKind: 'day_pass',
-          days: ['2026-12-10'],
-          extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
-        },
-      ],
-      familyGroups: [],
-      promoCode: 'FLAT20',
-    };
+  it('rejects FLAT20 when subtotal is $40.00 or less (e.g. $15 or $40), and applies $20 off when subtotal > $40.00', () => {
+    // 1. $15 single-day adult pass -> rejected (PROMO_NOT_APPLICABLE)
+    const onFifteenDollars = calculateBookingQuote({
+      intent: {
+        mode: 'individual',
+        booker: BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Anita Patel',
+            phone: '+1 972-555-0144',
+            age: 38,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+        ],
+        familyGroups: [],
+        promoCode: 'FLAT20',
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: false,
+    });
 
-    const res = calculateBookingQuote({
-      intent,
+    expect(onFifteenDollars.ok).toBe(true);
+    if (onFifteenDollars.ok) {
+      expect(onFifteenDollars.quote.promo.status).toBe('rejected');
+      expect(onFifteenDollars.quote.promo.rejectionCode).toBe('PROMO_NOT_APPLICABLE');
+      expect(onFifteenDollars.quote.totalCents).toBe(1500);
+    }
+
+    // 2. Exact $40.00 subtotal ($15*2 + $5*2 = $40.00) -> still rejected (must be MORE than $40)
+    const onExactFortyDollars = calculateBookingQuote({
+      intent: {
+        mode: 'individual',
+        booker: BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Anita Patel',
+            phone: '+1 972-555-0144',
+            age: 38,
+            passKind: 'day_pass',
+            days: ['2026-12-10', '2026-12-11'],
+            extras: { dandiyaPairs: 2, dinnerDates: [], workshopDates: [] },
+          },
+        ],
+        familyGroups: [],
+        promoCode: 'FLAT20',
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+    expect(onExactFortyDollars.ok).toBe(false);
+
+    // 3. $45.00 subtotal (3 evenings * $15 = $45.00 > $40.00) -> $20 off = $25.00 payable
+    const onFortyFiveDollars = calculateBookingQuote({
+      intent: {
+        mode: 'individual',
+        booker: BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Anita Patel',
+            phone: '+1 972-555-0144',
+            age: 38,
+            passKind: 'day_pass',
+            days: ['2026-12-10', '2026-12-11', '2026-12-12'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+        ],
+        familyGroups: [],
+        promoCode: 'FLAT20',
+      },
       products: DEFAULT_CATALOG,
       promos: DEFAULT_PROMOS,
       nowIso: '2026-11-26T12:00:00Z',
@@ -107,11 +170,11 @@ describe('domain/pricing, stock & promo codes', () => {
       strictPromo: true,
     });
 
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.quote.subtotalCents).toBe(1500);
-      expect(res.quote.discountCents).toBe(1500);
-      expect(res.quote.totalCents).toBe(0);
+    expect(onFortyFiveDollars.ok).toBe(true);
+    if (onFortyFiveDollars.ok) {
+      expect(onFortyFiveDollars.quote.subtotalCents).toBe(4500);
+      expect(onFortyFiveDollars.quote.discountCents).toBe(2000);
+      expect(onFortyFiveDollars.quote.totalCents).toBe(2500);
     }
   });
 
@@ -177,7 +240,38 @@ describe('domain/pricing, stock & promo codes', () => {
     }
   });
 
-  it('rejects KIDSFREE on Family Pass (no separate child ticket lines) as PROMO_NOT_APPLICABLE', () => {
+  it('rejects KIDSFREE when no child exists in the booking OR on Family Pass as PROMO_NOT_APPLICABLE', () => {
+    const adultOnlyNoChild = calculateBookingQuote({
+      intent: {
+        mode: 'individual',
+        booker: BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Anita Patel',
+            phone: '+1 972-555-0144',
+            age: 38,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+        ],
+        familyGroups: [],
+        promoCode: 'KIDSFREE',
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+    expect(adultOnlyNoChild.ok).toBe(false);
+    if (!adultOnlyNoChild.ok) {
+      expect(adultOnlyNoChild.violations[0]?.code).toBe('PROMO_NOT_APPLICABLE');
+    }
+
     const intent: BookingIntent = {
       mode: 'group',
       booker: BOOKER,

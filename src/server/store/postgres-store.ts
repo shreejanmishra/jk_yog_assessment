@@ -11,7 +11,10 @@ import type {
 } from '@contract/index';
 import {
   cents,
+  collectPromoParticipants,
+  computeAttendeeIdentityKey,
   EVENT_METADATA,
+  formatDatesDisplay,
   normalizeEmail,
   type AgeBand,
   type AttendeeCategoryChoice,
@@ -21,10 +24,12 @@ import {
   type PassKind,
   type PaymentMethodChoice,
   type PricingUnit,
+  type PriorPromoRedemptionMatch,
   type ProductCategory,
   type ProductCode,
   type PromoDefinition,
   type PromoDiscountType,
+  type PromoParticipant,
 } from '@domain/index';
 import {
   DEMO_PROFILE,
@@ -142,6 +147,7 @@ export class PostgresDataStore implements BookingDataStore {
       discount_type: PromoDiscountType;
       percent_bps: number | null;
       amount_cents: number | null;
+      min_subtotal_exclusive_cents: number | null;
       valid_from_iso: string | null;
       valid_until_iso: string | null;
       max_uses: number | null;
@@ -149,7 +155,8 @@ export class PostgresDataStore implements BookingDataStore {
       is_active: boolean;
     }>(
       `SELECT code, description, discount_type, percent_bps, amount_cents,
-              valid_from_iso, valid_until_iso, max_uses, used_count, is_active
+              min_subtotal_exclusive_cents, valid_from_iso, valid_until_iso,
+              max_uses, used_count, is_active
          FROM promo_codes`,
     );
 
@@ -176,6 +183,8 @@ export class PostgresDataStore implements BookingDataStore {
         discountType: p.discount_type,
         percentBps: p.percent_bps,
         amountCents: p.amount_cents !== null ? cents(p.amount_cents) : null,
+        minSubtotalExclusiveCents:
+          p.min_subtotal_exclusive_cents !== null ? cents(p.min_subtotal_exclusive_cents) : null,
         validFromIso: p.valid_from_iso,
         validUntilIso: p.valid_until_iso,
         maxUses: p.max_uses,
@@ -199,6 +208,92 @@ export class PostgresDataStore implements BookingDataStore {
     } finally {
       client.release();
     }
+  }
+
+  private async queryPriorPromoRedemption(
+    queryable: { query: pg.PoolClient['query'] },
+    participants: readonly PromoParticipant[],
+    now: Date,
+  ): Promise<PriorPromoRedemptionMatch | null> {
+    if (participants.length === 0) return null;
+
+    const bookingRows = await queryable.query<{
+      id: string;
+      reference: string;
+      promo_code_text: string;
+      booker_full_name: string;
+      booker_email: string;
+      booker_phone: string;
+    }>(
+      `SELECT id, reference, promo_code_text, booker_full_name, booker_email, booker_phone
+         FROM bookings
+        WHERE promo_code_text IS NOT NULL
+          AND (status = 'confirmed' OR (status = 'pending_payment' AND hold_expires_at > $1))
+        ORDER BY created_at ASC`,
+      [now.toISOString()],
+    );
+
+    if (bookingRows.rows.length === 0) return null;
+
+    const bookingIds = bookingRows.rows.map((b) => b.id);
+    const attRows = await queryable.query<{
+      booking_id: string;
+      selected_category: AgeBand;
+      full_name: string;
+      email: string | null;
+      phone: string | null;
+      guardian_phone: string | null;
+    }>(
+      `SELECT booking_id, selected_category, full_name, email, phone, guardian_phone
+         FROM attendees
+        WHERE booking_id = ANY($1::uuid[])`,
+      [bookingIds],
+    );
+
+    const attendeesByBooking = new Map<string, typeof attRows.rows>();
+    for (const row of attRows.rows) {
+      const list = attendeesByBooking.get(row.booking_id) ?? [];
+      list.push(row);
+      attendeesByBooking.set(row.booking_id, list);
+    }
+
+    for (const bk of bookingRows.rows) {
+      const storedParticipants = collectPromoParticipants({
+        booker: {
+          fullName: bk.booker_full_name,
+          email: bk.booker_email,
+          phone: bk.booker_phone,
+        },
+        attendees: (attendeesByBooking.get(bk.id) ?? []).map((a) => ({
+          category: a.selected_category,
+          fullName: a.full_name,
+          email: a.email,
+          phone: a.phone,
+          guardianPhone: a.guardian_phone,
+        })),
+      });
+      const storedKeySet = new Set(storedParticipants.map((sp) => sp.key));
+
+      for (const incoming of participants) {
+        if (storedKeySet.has(incoming.key)) {
+          return {
+            participantLabel: incoming.label,
+            bookingReference: bk.reference,
+            promoCode: bk.promo_code_text,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async findPriorPromoRedemption(
+    participants: readonly PromoParticipant[],
+    now: Date,
+  ): Promise<PriorPromoRedemptionMatch | null> {
+    await this.ready();
+    return this.queryPriorPromoRedemption(this.pool, participants, now);
   }
 
   async createBookingHold(input: CreateHoldInput): Promise<CreateBookingResponseDTO> {
@@ -272,6 +367,58 @@ export class PostgresDataStore implements BookingDataStore {
       );
       const eventRow = evRes.rows[0]!;
 
+      // 3b. Prevent issuing duplicate passes to the same individual on overlapping festival evenings
+      const activeHolderRows = await client.query<{
+        reference: string;
+        selected_category: AgeBand;
+        full_name: string;
+        phone: string | null;
+        guardian_phone: string | null;
+        valid_dates: string[];
+      }>(
+        `SELECT b.reference, a.selected_category, a.full_name, a.phone, a.guardian_phone, a.valid_dates
+           FROM attendees a
+           JOIN bookings b ON b.id = a.booking_id
+          WHERE b.event_id = $1
+            AND (b.status = 'confirmed' OR (b.status = 'pending_payment' AND b.hold_expires_at > $2))`,
+        [eventRow.id, input.now.toISOString()],
+      );
+
+      for (const pass of input.quote.attendeePasses) {
+        const incomingKey = computeAttendeeIdentityKey({
+          category: pass.ageBand,
+          fullName: pass.fullName,
+          phone: pass.phone,
+          guardianPhone: pass.guardian?.phone ?? null,
+        });
+        if (!incomingKey) continue;
+
+        for (const row of activeHolderRows.rows) {
+          const existingKey = computeAttendeeIdentityKey({
+            category: row.selected_category,
+            fullName: row.full_name,
+            phone: row.phone,
+            guardianPhone: row.guardian_phone,
+          });
+          if (existingKey !== incomingKey) continue;
+
+          const overlap = pass.validDates.filter((d) => row.valid_dates.includes(d));
+          if (overlap.length > 0) {
+            throw new ConflictError(
+              'DUPLICATE_PASS_HOLDER',
+              `${pass.fullName} already holds an active or confirmed pass for ${formatDatesDisplay(overlap)} (Ref ${row.reference}).`,
+              [
+                {
+                  path: 'attendees',
+                  code: 'DUPLICATE_ATTENDEE',
+                  message: `${pass.fullName} already holds a pass for ${formatDatesDisplay(overlap)}.`,
+                },
+              ],
+            );
+          }
+        }
+      }
+
       // 4. Deterministic atomic stock reservation ordered by product code (prevents deadlocks)
       const sortedDemand = [...input.quote.stockDemand.entries()].sort(([a], [b]) =>
         a.localeCompare(b),
@@ -328,10 +475,39 @@ export class PostgresDataStore implements BookingDataStore {
         productIdByCode.set(pr.code, pr.id);
       }
 
-      // 5. Atomic promo usage reservation
+      // 5. Atomic promo usage reservation + anti-abuse check
       let promoCodeId: string | null = null;
       let promoCodeText: string | null = null;
       if (input.quote.promo.status === 'applied') {
+        const currentPromoParticipants = collectPromoParticipants({
+          booker: input.booker,
+          attendees: input.quote.attendeePasses.map((p) => ({
+            category: p.ageBand,
+            fullName: p.fullName,
+            email: p.email,
+            phone: p.phone,
+            guardianPhone: p.guardian?.phone ?? null,
+          })),
+        });
+        const priorRedemption = await this.queryPriorPromoRedemption(
+          client,
+          currentPromoParticipants,
+          input.now,
+        );
+        if (priorRedemption) {
+          throw new ConflictError(
+            'PROMO_ALREADY_USED',
+            `Coupon limit reached: ${priorRedemption.participantLabel} already benefited from promo code ${priorRedemption.promoCode} on booking ${priorRedemption.bookingReference}. Coupons are limited to 1 per booker and attendee.`,
+            [
+              {
+                path: 'promoCode',
+                code: 'PROMO_ALREADY_USED',
+                message: `${priorRedemption.participantLabel} already used promo code ${priorRedemption.promoCode} on booking ${priorRedemption.bookingReference}.`,
+              },
+            ],
+          );
+        }
+
         const promoRes = await client.query<{ id: string; code: string }>(
           `UPDATE promo_codes
               SET used_count = used_count + 1
@@ -403,11 +579,11 @@ export class PostgresDataStore implements BookingDataStore {
         const attRes = await client.query<{ id: string }>(
           `INSERT INTO attendees (
              booking_id, position, pass_code, is_booker,
-             selected_category, age_band, full_name, age,
+             selected_category, age_band, full_name, email, phone, age,
              pass_kind, pass_label, valid_dates, valid_dates_display,
              extras_summary, guardian_name, guardian_phone
            )
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,$14,$15)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb,$16,$17)
            RETURNING id`,
           [
             bookingId,
@@ -417,6 +593,8 @@ export class PostgresDataStore implements BookingDataStore {
             p.ageBand,
             p.ageBand,
             p.fullName,
+            p.email,
+            p.phone,
             p.age,
             p.passKind,
             p.passLabel,

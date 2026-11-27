@@ -61,6 +61,8 @@ describe('domain/quote property-based invariants', () => {
           const normalized = attendees.map((a, i) => ({
             ...a,
             clientId: `c-${i}`,
+            fullName: `Guest ${i + 1}`,
+            phone: `+1 469-555-${String(100 + i).padStart(4, '0')}`,
           }));
           const intent: BookingIntent = {
             mode: 'group',

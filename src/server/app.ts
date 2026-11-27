@@ -16,6 +16,7 @@ import {
 } from '@contract/index';
 import {
   calculateBookingQuote,
+  collectPromoParticipants,
   EVENT_METADATA,
   FESTIVAL_DAYS,
   formatUSD,
@@ -65,6 +66,19 @@ function toDomainBookingIntent(dto: ReturnType<typeof BookingIntentSchema.parse>
     familyGroups: dto.familyGroups,
     promoCode: dto.promoCode,
   };
+}
+
+function extractIntentPromoParticipants(intent: BookingIntent) {
+  return collectPromoParticipants({
+    booker: intent.booker,
+    attendees: intent.attendees.map((a) => ({
+      category: a.selectedCategory,
+      fullName: a.fullName,
+      email: a.email ?? null,
+      phone: a.phone ?? null,
+      guardianPhone: a.guardian?.phone ?? null,
+    })),
+  });
 }
 
 export function createApp(deps: AppDependencies = {}): express.Express {
@@ -172,16 +186,23 @@ export function createApp(deps: AppDependencies = {}): express.Express {
 
   api.post('/quote', quoteLimiter, async (req, res) => {
     const parsed = parseBody(BookingIntentSchema, req.body);
-    await store.releaseExpiredHolds(clock.now());
+    const now = clock.now();
+    await store.releaseExpiredHolds(now);
     const { products, promos } = await store.getCatalogAndPromos();
 
+    const domainIntent = toDomainBookingIntent(parsed);
+    const priorPromoRedemption = parsed.promoCode?.trim()
+      ? await store.findPriorPromoRedemption(extractIntentPromoParticipants(domainIntent), now)
+      : null;
+
     const result = calculateBookingQuote({
-      intent: toDomainBookingIntent(parsed),
+      intent: domainIntent,
       products,
       promos,
-      nowIso: clock.nowIso(),
+      nowIso: now.toISOString(),
       todayIsoDate: clock.todayFestivalIsoDate(),
       strictPromo: false,
+      priorPromoRedemption,
     });
 
     if (!result.ok) {
@@ -244,13 +265,19 @@ export function createApp(deps: AppDependencies = {}): express.Express {
     await store.releaseExpiredHolds(now);
     const { products, promos } = await store.getCatalogAndPromos();
 
+    const domainIntent = toDomainBookingIntent(parsed);
+    const priorPromoRedemption = parsed.promoCode?.trim()
+      ? await store.findPriorPromoRedemption(extractIntentPromoParticipants(domainIntent), now)
+      : null;
+
     const quoteResult = calculateBookingQuote({
-      intent: toDomainBookingIntent(parsed),
+      intent: domainIntent,
       products,
       promos,
       nowIso: now.toISOString(),
       todayIsoDate: clock.todayFestivalIsoDate(),
       strictPromo: true,
+      priorPromoRedemption,
     });
 
     if (!quoteResult.ok) {

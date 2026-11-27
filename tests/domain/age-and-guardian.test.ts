@@ -190,4 +190,265 @@ describe('domain/age & guardian rules', () => {
       expect(codes).toContain('GUARDIAN_NAME_REQUIRED');
     }
   });
+
+  it('enforces unique phone for adults/minors (12+) while allowing siblings under one guardian phone and blocking duplicate child+guardian', () => {
+    // 1. Duplicate phone across Lead Booker (adult) and another 12+ passholder -> DUPLICATE_ATTENDEE
+    const duplicateAdultPhone = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: BASE_BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Ramesh Sharma',
+            phone: '+1 469-555-0192',
+            age: 34,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+          {
+            clientId: 'a2',
+            isBooker: false,
+            selectedCategory: 'adult',
+            fullName: 'Rohan Sharma',
+            phone: '469-555-0192', // Same phone without +1
+            age: 15,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(duplicateAdultPhone.ok).toBe(false);
+    if (!duplicateAdultPhone.ok) {
+      expect(duplicateAdultPhone.violations.some((v) => v.code === 'DUPLICATE_ATTENDEE')).toBe(
+        true,
+      );
+    }
+
+    // 2. Two DIFFERENT children under the SAME guardian phone -> ALLOWED
+    const twoSiblingsSameGuardian = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: BASE_BOOKER,
+        attendees: [
+          {
+            clientId: 'a1',
+            isBooker: true,
+            selectedCategory: 'adult',
+            fullName: 'Ramesh Sharma',
+            phone: '+1 469-555-0192',
+            age: 34,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+          },
+          {
+            clientId: 'c1',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Aarav Sharma',
+            age: 9,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+          },
+          {
+            clientId: 'c2',
+            isBooker: false,
+            selectedCategory: 'infant',
+            fullName: 'Diya Sharma',
+            age: 4,
+            passKind: 'free_infant',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(twoSiblingsSameGuardian.ok).toBe(true);
+
+    // 3. SAME child name + SAME guardian phone -> REJECTED (DUPLICATE_ATTENDEE)
+    const duplicateChildSameGuardian = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: { ...BASE_BOOKER, isAttending: false },
+        attendees: [
+          {
+            clientId: 'c1',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Aarav Sharma',
+            age: 9,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+          },
+          {
+            clientId: 'c2',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: '  aarav   sharma ',
+            age: 9,
+            passKind: 'day_pass',
+            days: ['2026-12-11'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '469-555-0192' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(duplicateChildSameGuardian.ok).toBe(false);
+    if (!duplicateChildSameGuardian.ok) {
+      expect(duplicateChildSameGuardian.violations.some((v) => v.code === 'DUPLICATE_ATTENDEE')).toBe(
+        true,
+      );
+    }
+  });
+
+  it('rejects guardian name or phone matching the minor (Under 5, Child 5–11, or 12–17 Minor) or another minor in the booking', () => {
+    // 1. Child (5–11) or Under 5 with guardian name == child's own name -> GUARDIAN_SELF_MATCH
+    const childSelfGuardian = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: BASE_BOOKER,
+        attendees: [
+          {
+            clientId: 'c1',
+            isBooker: false,
+            selectedCategory: 'child',
+            fullName: 'Aarav Sharma',
+            phone: '469-555-0180',
+            age: 9,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: '  aarav sharma ', phone: '+1 469-555-0180' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(childSelfGuardian.ok).toBe(false);
+    if (!childSelfGuardian.ok) {
+      const selfViolations = childSelfGuardian.violations.filter(
+        (v) => v.code === 'GUARDIAN_SELF_MATCH',
+      );
+      expect(selfViolations).toHaveLength(2);
+    }
+
+    // 2. 15-year-old minor on Adult pass with guardian phone matching minor's own phone -> GUARDIAN_SELF_MATCH
+    const teenSelfPhone = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: { ...BASE_BOOKER, isAttending: false },
+        attendees: [
+          {
+            clientId: 'teen-1',
+            isBooker: false,
+            selectedCategory: 'adult',
+            fullName: 'Diya Sharma',
+            phone: '+1 469-555-0199',
+            age: 15,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '469-555-0199' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(teenSelfPhone.ok).toBe(false);
+    if (!teenSelfPhone.ok) {
+      expect(teenSelfPhone.violations.some((v) => v.code === 'GUARDIAN_SELF_MATCH')).toBe(true);
+    }
+
+    // 3. Under 5 toddler listing a 15-year-old minor sibling in the same booking as guardian -> GUARDIAN_SELF_MATCH
+    const minorAsGuardianForToddler = calculateBookingQuote({
+      intent: {
+        mode: 'group',
+        booker: { ...BASE_BOOKER, isAttending: false },
+        attendees: [
+          {
+            clientId: 'teen-1',
+            isBooker: false,
+            selectedCategory: 'adult',
+            fullName: 'Diya Sharma',
+            phone: '+1 469-555-0199',
+            age: 15,
+            passKind: 'day_pass',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Ramesh Sharma', phone: '+1 469-555-0192' },
+          },
+          {
+            clientId: 'toddler-1',
+            isBooker: false,
+            selectedCategory: 'infant',
+            fullName: 'Kabir Sharma',
+            age: 3,
+            passKind: 'free_infant',
+            days: ['2026-12-10'],
+            extras: { dandiyaPairs: 0, dinnerDates: [], workshopDates: [] },
+            guardian: { name: 'Diya Sharma', phone: '+1 469-555-0199' },
+          },
+        ],
+        familyGroups: [],
+      },
+      products: DEFAULT_CATALOG,
+      promos: DEFAULT_PROMOS,
+      nowIso: '2026-11-26T12:00:00Z',
+      todayIsoDate: '2026-11-26',
+      strictPromo: true,
+    });
+
+    expect(minorAsGuardianForToddler.ok).toBe(false);
+    if (!minorAsGuardianForToddler.ok) {
+      expect(
+        minorAsGuardianForToddler.violations.some((v) => v.code === 'GUARDIAN_SELF_MATCH'),
+      ).toBe(true);
+    }
+  });
 });

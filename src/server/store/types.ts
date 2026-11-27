@@ -11,7 +11,9 @@ import type {
   CatalogProduct,
   PaymentMethodChoice,
   PricedQuote,
+  PriorPromoRedemptionMatch,
   PromoDefinition,
+  PromoParticipant,
 } from '@domain/index';
 
 export interface CreateHoldInput {
@@ -40,6 +42,11 @@ export interface BookingDataStore {
   }>;
 
   releaseExpiredHolds(now: Date): Promise<number>;
+
+  findPriorPromoRedemption(
+    participants: readonly PromoParticipant[],
+    now: Date,
+  ): Promise<PriorPromoRedemptionMatch | null>;
 
   createBookingHold(input: CreateHoldInput): Promise<CreateBookingResponseDTO>;
 
