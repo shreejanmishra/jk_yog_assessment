@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   buildCatalogMap,
@@ -217,24 +218,33 @@ export function GroupBookingBuilder(): React.ReactElement {
       }, [catalog, draft.attendees, draft.familyGroups.length]);
 
   const scrollToFirstProblem = (): void => {
+    const root = formRef.current;
+    if (!root) return;
+    const target = root.querySelector<HTMLElement>(
+      '[aria-invalid="true"], [data-has-violation="true"]',
+    );
+    if (!target) return;
+
+    const focusEl = target.matches('input, button, select, textarea')
+      ? target
+      : target.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)');
+    focusEl?.focus({ preventScroll: true });
+
+    const anchor = target.matches('input, select, textarea')
+      ? (target.closest('div') ?? target)
+      : target;
     window.requestAnimationFrame(() => {
-      const root = formRef.current;
-      if (!root) return;
-      const target = root.querySelector<HTMLElement>(
-        '[aria-invalid="true"], [data-has-violation="true"]',
-      );
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        if (target.matches('input, button, select, textarea')) {
-          target.focus({ preventScroll: true });
-        }
-      }
+      const rect = anchor.getBoundingClientRect();
+      const targetTop = Math.max(0, window.scrollY + rect.top - 120);
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
     });
   };
 
   const handleConfirmGroup = (e: React.FormEvent): void => {
     e.preventDefault();
-    setAttempted(true);
+    flushSync(() => {
+      setAttempted(true);
+    });
 
     if (
       draft.booker.fullName.trim().length < 2 ||
@@ -581,12 +591,9 @@ export function GroupBookingBuilder(): React.ReactElement {
           <Button
             type="submit"
             size="lg"
-            disabled={
-              isBookerUnder18 ||
-              bookingLevelViolations.some(
-                (v) => v.code === 'PRODUCT_SOLD_OUT' || v.code === 'INSUFFICIENT_STOCK',
-              )
-            }
+            disabled={bookingLevelViolations.some(
+              (v) => v.code === 'PRODUCT_SOLD_OUT' || v.code === 'INSUFFICIENT_STOCK',
+            )}
           >
             Confirm and review passes
           </Button>

@@ -117,23 +117,15 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-primary-dark/95 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-        {/* Left cluster: Brand logo + divider + inline navigation links (matching reference header format) */}
+      <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        {/* Left cluster: Brand wordmark + divider + inline navigation links pinned to left edge */}
         <div className="flex min-w-0 items-center gap-5">
           <Link
             to="/"
             onClick={() => isLanding && goToSection('home')}
-            className="group flex shrink-0 items-center gap-2.5"
+            className="shrink-0 font-serif text-lg font-semibold tracking-tight text-white transition-colors hover:text-cream"
           >
-            <span
-              aria-hidden="true"
-              className="squircle flex h-8 w-8 items-center justify-center rounded-[10px] border border-gold/50 bg-primary/15 text-base leading-none text-bright-gold transition-colors group-hover:border-bright-gold group-hover:bg-primary/25"
-            >
-              🕉
-            </span>
-            <span className="font-serif text-lg font-semibold tracking-tight text-white">
-              Sharad Utsav <span className="text-primary">2026</span>
-            </span>
+            Sharad Utsav <span className="text-primary">2026</span>
           </Link>
 
           <span aria-hidden="true" className="hidden h-4 w-px bg-white/15 lg:block" />

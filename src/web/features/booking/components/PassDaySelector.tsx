@@ -169,7 +169,7 @@ export function PassDaySelector({
       )}
 
       {(passKind === 'day_pass' || passKind === 'free_infant') && (
-        <div>
+        <div data-has-violation={error ? 'true' : undefined}>
           <span className="mb-2 block text-sm font-medium text-white/90">Evenings attending</span>
           <div className="flex flex-wrap gap-2">
             {FESTIVAL_DAYS.map((day) => {
