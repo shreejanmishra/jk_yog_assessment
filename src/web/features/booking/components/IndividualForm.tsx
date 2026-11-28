@@ -8,12 +8,15 @@ import {
 import { Button } from '../../../ui/Button';
 import { FormSection } from '../../../ui/FormSection';
 import { FieldError, TextField } from '../../../ui/TextField';
+import { useCatalogStore } from '../../../stores/catalog-store';
 import { useBookingStore } from '../store/booking-store';
 import { parseIntegerAge } from '../store/transitions';
 import { ExtrasSelector } from './ExtrasSelector';
 import { PassDaySelector } from './PassDaySelector';
 
 export function IndividualForm(): React.ReactElement {
+  const catalog = useCatalogStore((s) => s.catalog);
+  const getProduct = useCatalogStore((s) => s.getProduct);
   const draft = useBookingStore((s) => s.draft);
   const quoteState = useBookingStore((s) => s.quoteState);
   const patchBooker = useBookingStore((s) => s.patchBooker);
@@ -23,6 +26,11 @@ export function IndividualForm(): React.ReactElement {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const selfAttendee = draft.attendees[0]!;
+  const selectedPassSoldOut =
+    catalog !== null &&
+    (selfAttendee.passKind === 'all_day'
+      ? (getProduct('ALL_DAY_ADULT')?.availability.remaining ?? 0) <= 0
+      : (getProduct('DAY_PASS_ADULT')?.availability.remaining ?? 0) <= 0);
   const parsedAge = parseIntegerAge(draft.booker.ageInput);
   const hasAgeTyped = draft.booker.ageInput.trim().length > 0;
 
@@ -72,6 +80,7 @@ export function IndividualForm(): React.ReactElement {
       !isValidEmail(draft.booker.email) ||
       !isLegalAdultBooker(parsedAge) ||
       (selfAttendee.passKind === 'day_pass' && selfAttendee.days.length === 0) ||
+      selectedPassSoldOut ||
       stockIssues.length > 0
     ) {
       return;
@@ -174,7 +183,11 @@ export function IndividualForm(): React.ReactElement {
         <p className="text-xs text-white/55">
           You can enter a coupon code and choose your payment method in the next step.
         </p>
-        <Button type="submit" size="lg" disabled={isUnder18Blocked}>
+        <Button
+          type="submit"
+          size="lg"
+          disabled={isUnder18Blocked || selectedPassSoldOut || stockIssues.length > 0}
+        >
           Confirm and review pass
         </Button>
       </div>

@@ -3561,9 +3561,10 @@ class PostgresDataStore {
       `SELECT p.code, p.name, p.description, p.category, p.age_band,
               p.pricing_unit, p.day_rule, p.allowed_dates, p.unit_price_cents,
               p.max_adults, p.max_children, p.sort_order,
-              i.total, i.remaining
+              COALESCE(i.total, 0) AS total,
+              COALESCE(i.remaining, 0) AS remaining
          FROM products p
-         JOIN inventory i ON i.product_id = p.id
+         LEFT JOIN inventory i ON i.product_id = p.id
         WHERE p.is_active = true
         ORDER BY p.sort_order ASC`
     );
@@ -3573,23 +3574,28 @@ class PostgresDataStore {
               max_uses, used_count, is_active
          FROM promo_codes`
     );
+    const products2 = prodRows.rows.length > 0 ? prodRows.rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      description: r.description,
+      category: r.category,
+      ageBand: r.age_band,
+      pricingUnit: r.pricing_unit,
+      dayRule: r.day_rule,
+      allowedDates: r.allowed_dates,
+      unitPriceCents: cents(r.unit_price_cents),
+      totalStock: r.total,
+      remainingStock: r.remaining,
+      maxAdults: r.max_adults,
+      maxChildren: r.max_children,
+      sortOrder: r.sort_order
+    })) : DEFAULT_CATALOG.map((item) => ({
+      ...item,
+      totalStock: 0,
+      remainingStock: 0
+    }));
     return {
-      products: prodRows.rows.map((r) => ({
-        code: r.code,
-        name: r.name,
-        description: r.description,
-        category: r.category,
-        ageBand: r.age_band,
-        pricingUnit: r.pricing_unit,
-        dayRule: r.day_rule,
-        allowedDates: r.allowed_dates,
-        unitPriceCents: cents(r.unit_price_cents),
-        totalStock: r.total,
-        remainingStock: r.remaining,
-        maxAdults: r.max_adults,
-        maxChildren: r.max_children,
-        sortOrder: r.sort_order
-      })),
+      products: products2,
       promos: promoRows.rows.map((p) => ({
         code: p.code,
         description: p.description,

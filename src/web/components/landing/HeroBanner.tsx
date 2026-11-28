@@ -42,10 +42,10 @@ function PriceList({ rows }: { rows: readonly PriceRow[] }): React.ReactElement 
 
 /**
  * Festival banner.
- * - Collapsed, the banner has a fixed height. Details that don't fit are clipped with a fade,
- *   and a "Show full details" toggle expands the banner in place.
- * - The Book now button sits in a footer bar outside the clipped area, so long content can
- *   never push it out of view.
+ * - Uses iOS squircle container rounding (`rounded-container`) and the sacred mandala + Om SVG
+ *   artwork extracted from the design sheet while preserving brand colours and existing copy.
+ * - Collapsed, the banner has a fixed height; overflowing details fade out behind "Show full details".
+ * - The Book now button sits in a footer bar outside the clipped area so it is never pushed out of view.
  */
 export function HeroBanner(): React.ReactElement {
   const navigate = useNavigate();
@@ -68,10 +68,13 @@ export function HeroBanner(): React.ReactElement {
     catalog?.products.find((p) => p.code === code);
   const priceOf = (code: ProductDTO['code'], fallbackCents: number): string =>
     formatUSD(cents(product(code)?.unitPriceCents ?? fallbackCents));
-  const soldOut = (code: ProductDTO['code']): PriceRow['status'] =>
-    product(code)?.availability.status === 'sold_out' ? { tone: 'sold-out', text: 'Sold out' } : null;
+  const soldOut = (code: ProductDTO['code']): PriceRow['status'] => {
+    if (!catalog) return null;
+    const p = product(code);
+    return !p || p.availability.remaining <= 0 ? { tone: 'sold-out', text: 'Sold out' } : null;
+  };
 
-  const workshopLeft = product('GARBA_WORKSHOP')?.availability.remaining;
+  const workshopLeft = catalog ? (product('GARBA_WORKSHOP')?.availability.remaining ?? 0) : undefined;
   const workshopStatus: PriceRow['status'] =
     workshopLeft === 0
       ? { tone: 'sold-out', text: 'Sold out' }
@@ -80,18 +83,54 @@ export function HeroBanner(): React.ReactElement {
         : null;
 
   const ticketRows: PriceRow[] = [
-    { label: 'Day pass, adult (12+)', price: `${priceOf('DAY_PASS_ADULT', 1500)} / evening`, status: soldOut('DAY_PASS_ADULT') },
-    { label: 'Day pass, child (5–11)', price: `${priceOf('DAY_PASS_CHILD', 800)} / evening`, status: soldOut('DAY_PASS_CHILD') },
-    { label: 'All-day pass, adult', price: priceOf('ALL_DAY_ADULT', 6000), status: soldOut('ALL_DAY_ADULT') },
-    { label: 'All-day pass, child', price: priceOf('ALL_DAY_CHILD', 3000), status: soldOut('ALL_DAY_CHILD') },
-    { label: 'Family pass', note: '2 adults and 2 children, one evening', price: priceOf('FAMILY_PASS', 4000), status: soldOut('FAMILY_PASS') },
+    {
+      label: 'Day pass, adult (12+)',
+      price: `${priceOf('DAY_PASS_ADULT', 1500)} / evening`,
+      status: soldOut('DAY_PASS_ADULT'),
+    },
+    {
+      label: 'Day pass, child (5–11)',
+      price: `${priceOf('DAY_PASS_CHILD', 800)} / evening`,
+      status: soldOut('DAY_PASS_CHILD'),
+    },
+    {
+      label: 'All-day pass, adult',
+      price: priceOf('ALL_DAY_ADULT', 6000),
+      status: soldOut('ALL_DAY_ADULT') ?? { tone: 'sold-out', text: 'Sold out' },
+    },
+    {
+      label: 'All-day pass, child',
+      price: priceOf('ALL_DAY_CHILD', 3000),
+      status: soldOut('ALL_DAY_CHILD'),
+    },
+    {
+      label: 'Family pass',
+      note: '2 adults and 2 children, one evening',
+      price: priceOf('FAMILY_PASS', 4000),
+      status: soldOut('FAMILY_PASS'),
+    },
     { label: 'Under 5', price: 'Free' },
   ];
 
   const extraRows: PriceRow[] = [
-    { label: 'Dinner plate', note: 'Per person, per evening', price: priceOf('DINNER_PLATE', 1200) },
-    { label: 'Garba workshop', note: 'Fri 11 and Sun 13 December', price: priceOf('GARBA_WORKSHOP', 2000), status: workshopStatus },
-    { label: 'Dandiya sticks', note: 'Per pair', price: priceOf('DANDIYA_PAIR', 500) },
+    {
+      label: 'Dinner plate',
+      note: 'Per person, per evening',
+      price: priceOf('DINNER_PLATE', 1200),
+      status: soldOut('DINNER_PLATE'),
+    },
+    {
+      label: 'Garba workshop',
+      note: 'Fri 11 and Sun 13 December',
+      price: priceOf('GARBA_WORKSHOP', 2000),
+      status: workshopStatus,
+    },
+    {
+      label: 'Dandiya sticks',
+      note: 'Per pair',
+      price: priceOf('DANDIYA_PAIR', 500),
+      status: soldOut('DANDIYA_PAIR'),
+    },
   ];
 
   const facts = [
@@ -102,19 +141,74 @@ export function HeroBanner(): React.ReactElement {
 
   return (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-card border border-gold/40 bg-primary-dark ${
+      className={`relative flex flex-col overflow-hidden rounded-container border border-gold/40 bg-glass ${
         expanded ? '' : 'h-[640px] sm:h-[580px]'
       }`}
     >
-      {/* Autumn full moon: Sharad Purnima is the night the festival celebrates. */}
+      {/* Sacred Mandala + Om SVG Backdrop extracted from design sheet, tinted strictly with brand gold */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-28 -top-28 hidden h-96 w-96 rounded-full sm:block"
-        style={{
-          background:
-            'radial-gradient(circle at 42% 58%, rgb(253 243 228 / 0.11), rgb(253 243 228 / 0.035) 58%, transparent 70%)',
-        }}
-      />
+        className="pointer-events-none absolute -right-28 -top-24 flex items-center justify-center select-none text-primary"
+      >
+        <div className="absolute h-80 w-80 rounded-full bg-primary/15 blur-[95px]" />
+        <svg
+          viewBox="0 0 500 500"
+          className="relative h-[460px] w-[460px] max-w-none text-current sm:h-[560px] sm:w-[560px]"
+          fill="none"
+        >
+          <circle
+            cx="250"
+            cy="250"
+            r="230"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeDasharray="6 6"
+            opacity="0.2"
+          />
+          <circle cx="250" cy="250" r="205" stroke="currentColor" strokeWidth="1" opacity="0.14" />
+          <circle
+            cx="250"
+            cy="250"
+            r="160"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeDasharray="4 8"
+            opacity="0.18"
+          />
+          <circle cx="250" cy="250" r="125" stroke="currentColor" strokeWidth="1" opacity="0.14" />
+          <circle
+            cx="250"
+            cy="250"
+            r="85"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeDasharray="3 5"
+            opacity="0.2"
+          />
+          <g stroke="currentColor" strokeWidth="1" opacity="0.15">
+            <line x1="250" y1="20" x2="250" y2="75" />
+            <line x1="250" y1="425" x2="250" y2="480" />
+            <line x1="20" y1="250" x2="75" y2="250" />
+            <line x1="425" y1="250" x2="480" y2="250" />
+            <line x1="87" y1="87" x2="127" y2="127" />
+            <line x1="373" y1="373" x2="413" y2="413" />
+            <line x1="87" y1="413" x2="127" y2="373" />
+            <line x1="373" y1="127" x2="413" y2="87" />
+          </g>
+          <text
+            x="250"
+            y="325"
+            textAnchor="middle"
+            fontFamily="var(--font-serif)"
+            fontSize="210"
+            fontWeight="bold"
+            fill="currentColor"
+            opacity="0.14"
+          >
+            🕉
+          </text>
+        </svg>
+      </div>
 
       <div
         id="hero-details"
@@ -123,7 +217,7 @@ export function HeroBanner(): React.ReactElement {
           expanded ? 'pb-10' : 'overflow-hidden'
         }`}
       >
-        <p className="text-sm tracking-wide text-bright-gold">
+        <p className="text-sm font-medium tracking-wide text-bright-gold">
           Thursday 10 – Monday 14 December 2026
         </p>
         <h1 className="mt-4 font-serif text-5xl leading-[1.05] text-cream sm:text-7xl">
@@ -134,11 +228,11 @@ export function HeroBanner(): React.ReactElement {
           at Radha Krishna Temple in Allen.
         </p>
 
-        <dl className="mt-8 grid max-w-3xl gap-px overflow-hidden rounded-control border border-white/10 bg-white/10 sm:grid-cols-3">
+        <dl className="mt-8 grid max-w-3xl gap-px overflow-hidden rounded-card border border-gold bg-gold/30 shadow-sm sm:grid-cols-3">
           {facts.map((fact) => (
-            <div key={fact.label} className="bg-primary-dark px-4 py-3">
-              <dt className="text-xs text-white/50">{fact.label}</dt>
-              <dd className="mt-0.5 text-sm text-white">{fact.value}</dd>
+            <div key={fact.label} className="bg-cream px-4 py-3.5">
+              <dt className="text-xs font-medium text-primary-text">{fact.label}</dt>
+              <dd className="mt-0.5 text-sm font-semibold text-heading">{fact.value}</dd>
             </div>
           ))}
         </dl>
@@ -185,12 +279,12 @@ export function HeroBanner(): React.ReactElement {
         {!expanded && isOverflowing && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-primary-dark via-primary-dark/85 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-primary-dark via-primary-dark/90 to-transparent"
           />
         )}
       </div>
 
-      <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-primary-dark px-6 py-4 sm:px-12">
+      <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-primary-dark/95 px-6 py-4 sm:px-12">
         <Button size="lg" onClick={() => navigate('/book')}>
           Book now
           <ArrowRight className="h-4 w-4" aria-hidden="true" />

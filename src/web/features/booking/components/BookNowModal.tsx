@@ -264,10 +264,10 @@ export function BookNowModal(): React.ReactElement {
                     <input
                       id="coupon-input"
                       type="text"
-                      placeholder="SEVA10, FLAT20 (over $40) or KIDSFREE"
+                      placeholder="Enter coupon code"
                       value={couponInput}
                       onChange={(e) => setCouponInput(e.target.value)}
-                      className="h-11 flex-1 rounded-control border border-white/20 bg-white/[0.04] px-3.5 text-sm uppercase text-white placeholder:normal-case placeholder:text-white/35 hover:border-white/35"
+                      className="h-11 flex-1 rounded-control border border-gold bg-cream px-3.5 text-sm font-medium uppercase text-heading caret-heading placeholder:normal-case placeholder:font-normal placeholder:text-primary-text/65 transition-colors hover:border-bright-gold"
                     />
                     <Button type="submit" variant="secondary">
                       Apply

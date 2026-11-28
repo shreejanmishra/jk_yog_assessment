@@ -50,10 +50,9 @@ export function TextField({
   const isLight = surface === 'light';
   const labelColor = isLight ? 'text-heading' : 'text-white/90';
   const mutedColor = isLight ? 'text-primary-text' : 'text-white/50';
-  const inputColors = isLight
-    ? 'border-primary-text/35 bg-white text-heading placeholder:text-primary-text/55 hover:border-primary-text/60'
-    : 'border-white/20 bg-white/[0.04] text-white placeholder:text-white/35 hover:border-white/35';
-  const errorBorder = error ? 'border-error hover:border-error' : '';
+  const inputColors =
+    'border-gold bg-cream text-heading caret-heading placeholder:text-primary-text/65 hover:border-bright-gold';
+  const errorBorder = error ? '!border-error hover:!border-error' : '';
 
   return (
     <div className="w-full">
