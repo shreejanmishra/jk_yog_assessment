@@ -71,7 +71,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex max-h-[94vh] w-full flex-col rounded-t-card shadow-2xl shadow-black/50 outline-none sm:rounded-card ${maxWidthClass} ${panelClass}`}
+        className={`relative flex max-h-[94vh] w-full flex-col rounded-t-modal shadow-2xl shadow-black/50 outline-none sm:rounded-modal ${maxWidthClass} ${panelClass}`}
       >
         <div
           className={`flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4 sm:px-7 sm:py-5 ${dividerClass}`}

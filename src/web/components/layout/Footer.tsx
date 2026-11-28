@@ -6,10 +6,18 @@ export function Footer(): React.ReactElement {
     <footer className="mt-24 border-t border-white/10">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 text-sm sm:grid-cols-3 sm:px-6">
         <div>
-          <p className="font-serif text-lg text-white">
-            Sharad Utsav <span className="text-primary">2026</span>
-          </p>
-          <p className="mt-2 leading-relaxed text-white/60">
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="squircle flex h-7 w-7 items-center justify-center rounded-[9px] border border-gold/50 bg-primary/15 text-sm leading-none text-bright-gold"
+            >
+              🕉
+            </span>
+            <p className="font-serif text-lg text-white">
+              Sharad Utsav <span className="text-primary">2026</span>
+            </p>
+          </div>
+          <p className="mt-2.5 leading-relaxed text-white/60">
             {EVENT_METADATA.venue}
             <br />
             {EVENT_METADATA.address}

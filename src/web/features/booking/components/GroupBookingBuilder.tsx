@@ -186,6 +186,8 @@ export function GroupBookingBuilder(): React.ReactElement {
 
   const familySuggestion = useMemo(() => {
     if (draft.familyGroups.length > 0) return null;
+    const familyProd = catalog?.products.find((p) => p.code === 'FAMILY_PASS');
+    if (catalog && (familyProd?.availability.remaining ?? 0) <= 0) return null;
     for (const day of FESTIVAL_DAYS) {
       const adultsOnDay = draft.attendees.filter(
         (a) =>
@@ -203,16 +205,16 @@ export function GroupBookingBuilder(): React.ReactElement {
       );
       if (adultsOnDay.length === 2 && childrenOnDay.length === 2) {
         const chosen = [...adultsOnDay.slice(0, 2), ...childrenOnDay.slice(0, 2)];
-        return {
-          date: day.date,
-          shortLabel: day.shortLabel,
-          memberIds: chosen.map((m) => m.clientId),
-          savingsDollars: 6,
-        };
-      }
-    }
-    return null;
-  }, [draft.attendees, draft.familyGroups.length]);
+            return {
+              date: day.date,
+              shortLabel: day.shortLabel,
+              memberIds: chosen.map((m) => m.clientId),
+              savingsDollars: 6,
+            };
+          }
+        }
+        return null;
+      }, [catalog, draft.attendees, draft.familyGroups.length]);
 
   const scrollToFirstProblem = (): void => {
     window.requestAnimationFrame(() => {
@@ -576,7 +578,16 @@ export function GroupBookingBuilder(): React.ReactElement {
             {draft.attendees.length} {draft.attendees.length === 1 ? 'pass' : 'passes'} in this
             booking
           </p>
-          <Button type="submit" size="lg" disabled={isBookerUnder18}>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={
+              isBookerUnder18 ||
+              bookingLevelViolations.some(
+                (v) => v.code === 'PRODUCT_SOLD_OUT' || v.code === 'INSUFFICIENT_STOCK',
+              )
+            }
+          >
             Confirm and review passes
           </Button>
         </div>

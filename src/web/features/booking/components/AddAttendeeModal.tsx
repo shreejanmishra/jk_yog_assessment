@@ -18,6 +18,7 @@ import { Button } from '../../../ui/Button';
 import { Modal } from '../../../ui/Modal';
 import { SegmentedControl, type SegmentedOption } from '../../../ui/SegmentedControl';
 import { FieldError, TextField } from '../../../ui/TextField';
+import { useCatalogStore } from '../../../stores/catalog-store';
 import {
   changeAttendeeCategory,
   parseIntegerAge,
@@ -80,6 +81,8 @@ export function AddAttendeeModal({
   onClose,
   onSave,
 }: AddAttendeeModalProps): React.ReactElement {
+  const catalog = useCatalogStore((s) => s.catalog);
+  const getProduct = useCatalogStore((s) => s.getProduct);
   const formId = React.useId();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<AttendeeDraft>(() => createBlankAttendee('adult'));
@@ -260,15 +263,33 @@ export function AddAttendeeModal({
       ? 'Select at least one evening.'
       : null;
 
+  const passSoldOutError = (() => {
+    if (form.selectedCategory === 'infant' || catalog === null) return null;
+    const code =
+      form.selectedCategory === 'adult'
+        ? form.passKind === 'all_day'
+          ? 'ALL_DAY_ADULT'
+          : 'DAY_PASS_ADULT'
+        : form.passKind === 'all_day'
+          ? 'ALL_DAY_CHILD'
+          : 'DAY_PASS_CHILD';
+    const prod = getProduct(code);
+    if ((prod?.availability.remaining ?? 0) <= 0) {
+      return `${prod?.name ?? 'Selected pass'} is sold out.`;
+    }
+    return null;
+  })();
+
   const firstSubmitIssue = attempted
-    ? (nameError ??
+    ? (passSoldOutError ??
+      nameError ??
       ageError ??
       phoneError ??
       emailError ??
       guardianNameError ??
       guardianPhoneError ??
       daysError)
-    : null;
+    : passSoldOutError;
 
   const handleCategorySwitch = (nextCat: AttendeeCategoryChoice): void => {
     setForm((prev) => changeAttendeeCategory(prev, nextCat, []));
@@ -294,6 +315,7 @@ export function AddAttendeeModal({
     setAttempted(true);
 
     if (
+      Boolean(passSoldOutError) ||
       form.fullName.trim().length < 2 ||
       !validIntAge ||
       isCategoryMismatch ||

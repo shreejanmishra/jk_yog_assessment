@@ -34,6 +34,7 @@ export function ExtrasSelector({
   extras,
   onChangeExtras,
 }: ExtrasSelectorProps): React.ReactElement {
+  const catalog = useCatalogStore((s) => s.catalog);
   const getProduct = useCatalogStore((s) => s.getProduct);
 
   const validDates =
@@ -44,7 +45,9 @@ export function ExtrasSelector({
   const workshopProd = getProduct('GARBA_WORKSHOP');
   const dandiyaProd = getProduct('DANDIYA_PAIR');
 
-  const workshopRemaining = workshopProd?.availability.remaining ?? 2;
+  const dinnerRemaining = catalog ? (dinnerProd?.availability.remaining ?? 0) : 1700;
+  const workshopRemaining = catalog ? (workshopProd?.availability.remaining ?? 0) : 2;
+  const dandiyaRemaining = catalog ? (dandiyaProd?.availability.remaining ?? 0) : 900;
 
   const toggleDinnerDate = (date: string): void => {
     const next = extras.dinnerDates.includes(date)
@@ -69,7 +72,8 @@ export function ExtrasSelector({
   };
 
   const setDandiyaPairs = (count: number): void => {
-    const clamped = Math.max(0, Math.min(20, count));
+    const maxAllowed = Math.min(20, Math.max(0, dandiyaRemaining));
+    const clamped = Math.max(0, Math.min(maxAllowed, count));
     onChangeExtras({
       dandiyaPairs: clamped,
       dinnerDates: [...extras.dinnerDates],
@@ -83,7 +87,14 @@ export function ExtrasSelector({
       <div className="py-4">
         <div className="flex items-baseline justify-between gap-4">
           <div>
-            <span className="text-sm font-medium text-white">Dinner plate</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-white">Dinner plate</span>
+              {dinnerRemaining <= 0 ? (
+                <Badge variant="sold-out">Sold out</Badge>
+              ) : dinnerRemaining <= 10 ? (
+                <Badge variant="low-stock">{dinnerRemaining} left</Badge>
+              ) : null}
+            </div>
             <p className="mt-0.5 text-xs text-white/55">
               Vegetarian evening meal on any evening covered by your pass.
             </p>
@@ -94,7 +105,9 @@ export function ExtrasSelector({
         </div>
 
         <div className="mt-3">
-          {validDates.length === 0 ? (
+          {dinnerRemaining <= 0 ? (
+            <p className="text-xs text-white/45">Sold out — no dinner plates remaining.</p>
+          ) : validDates.length === 0 ? (
             <p className="text-xs text-white/45">Select at least one evening above first.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -180,7 +193,14 @@ export function ExtrasSelector({
       {/* 3. Dandiya sticks */}
       <div className="flex flex-wrap items-center justify-between gap-4 py-4">
         <div>
-          <span className="text-sm font-medium text-white">Dandiya sticks</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white">Dandiya sticks</span>
+            {dandiyaRemaining <= 0 ? (
+              <Badge variant="sold-out">Sold out</Badge>
+            ) : dandiyaRemaining <= 10 ? (
+              <Badge variant="low-stock">{dandiyaRemaining} left</Badge>
+            ) : null}
+          </div>
           <p className="mt-0.5 text-xs text-white/55">
             Wooden pair to collect at the gate ({formatUSD(cents(dandiyaProd?.unitPriceCents ?? 500))}{' '}
             per pair).
@@ -203,7 +223,7 @@ export function ExtrasSelector({
           <button
             type="button"
             aria-label="Increase Dandiya pairs"
-            disabled={extras.dandiyaPairs >= 20}
+            disabled={dandiyaRemaining <= 0 || extras.dandiyaPairs >= Math.min(20, dandiyaRemaining)}
             onClick={() => setDandiyaPairs(extras.dandiyaPairs + 1)}
             className="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-sm text-white/80 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-35"
           >

@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
-import { Button } from '../../ui/Button';
 
 export type LandingSectionId = 'home' | 'about' | 'mission' | 'contribute';
 
@@ -42,7 +41,12 @@ interface MenuItemProps {
   children: React.ReactNode;
 }
 
-function MenuItem({ icon: Icon, onClick, tone = 'default', children }: MenuItemProps): React.ReactElement {
+function MenuItem({
+  icon: Icon,
+  onClick,
+  tone = 'default',
+  children,
+}: MenuItemProps): React.ReactElement {
   return (
     <button
       type="button"
@@ -58,7 +62,10 @@ function MenuItem({ icon: Icon, onClick, tone = 'default', children }: MenuItemP
   );
 }
 
-export function Header({ activeSection = 'home', onSelectSection }: HeaderProps): React.ReactElement {
+export function Header({
+  activeSection = 'home',
+  onSelectSection,
+}: HeaderProps): React.ReactElement {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, openSignInModal, loginDemo, logout } = useAuthStore();
@@ -109,46 +116,96 @@ export function Header({ activeSection = 'home', onSelectSection }: HeaderProps)
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-primary-dark/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
-        <Link
-          to="/"
-          onClick={() => isLanding && goToSection('home')}
-          className="shrink-0 font-serif text-xl text-white"
-        >
-          Sharad Utsav <span className="text-primary">2026</span>
-        </Link>
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-primary-dark/95 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+        {/* Left cluster: Brand logo + divider + inline navigation links (matching reference header format) */}
+        <div className="flex min-w-0 items-center gap-5">
+          <Link
+            to="/"
+            onClick={() => isLanding && goToSection('home')}
+            className="group flex shrink-0 items-center gap-2.5"
+          >
+            <span
+              aria-hidden="true"
+              className="squircle flex h-8 w-8 items-center justify-center rounded-[10px] border border-gold/50 bg-primary/15 text-base leading-none text-bright-gold transition-colors group-hover:border-bright-gold group-hover:bg-primary/25"
+            >
+              🕉
+            </span>
+            <span className="font-serif text-lg font-semibold tracking-tight text-white">
+              Sharad Utsav <span className="text-primary">2026</span>
+            </span>
+          </Link>
 
-        <nav aria-label="Page sections" className="hidden h-full items-stretch lg:flex">
-          {NAV_ITEMS.map((item) => {
-            const isActive = isLanding && activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => goToSection(item.id)}
-                aria-current={isActive ? 'true' : undefined}
-                className={`relative cursor-pointer px-3.5 text-sm transition-colors ${
-                  isActive ? 'text-white' : 'text-white/60 hover:text-white'
-                }`}
-              >
-                {item.label}
-                <span
-                  aria-hidden="true"
-                  className={`absolute inset-x-3.5 bottom-0 h-0.5 bg-primary transition-opacity ${
-                    isActive ? 'opacity-100' : 'opacity-0'
+          <span aria-hidden="true" className="hidden h-4 w-px bg-white/15 lg:block" />
+
+          <nav aria-label="Page sections" className="hidden items-center gap-1 lg:flex">
+            {NAV_ITEMS.map((item) => {
+              const isActive = isLanding && activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goToSection(item.id)}
+                  aria-current={isActive ? 'true' : undefined}
+                  className={`relative cursor-pointer rounded-control px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-white'
+                      : 'text-white/65 hover:bg-white/[0.04] hover:text-white'
                   }`}
-                />
-              </button>
-            );
-          })}
-        </nav>
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    {item.label}
+                    {isActive && (
+                      <span
+                        aria-hidden="true"
+                        className="h-1.5 w-1.5 rounded-full bg-primary"
+                      />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-        <div className="flex items-center gap-3">
+        {/* Right cluster: Quick link + circular icon buttons + pill CTA + circular user avatar */}
+        <div className="flex shrink-0 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => goToProfilePage('/me/bookings')}
+            className="hidden cursor-pointer rounded-control px-2.5 py-1.5 text-sm font-medium text-white/75 transition-colors hover:text-white md:inline-flex"
+          >
+            My bookings
+          </button>
+
+          <button
+            type="button"
+            onClick={() => goToProfilePage('/me/contributions')}
+            aria-label="My contributions"
+            title="My contributions"
+            className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white/80 transition-colors hover:border-gold/60 hover:text-bright-gold sm:flex"
+          >
+            <HeartHandshake className="h-4 w-4" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => goToProfilePage('/me/bookings')}
+            aria-label="View festival passes"
+            title="View festival passes"
+            className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white/80 transition-colors hover:border-gold/60 hover:text-bright-gold sm:flex"
+          >
+            <Ticket className="h-4 w-4" aria-hidden="true" />
+          </button>
+
           {location.pathname !== '/book' && (
-            <Button size="sm" onClick={() => navigate('/book')} className="hidden sm:inline-flex">
+            <button
+              type="button"
+              onClick={() => navigate('/book')}
+              className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-dark transition-colors hover:bg-bright-gold"
+            >
               Book tickets
-            </Button>
+            </button>
           )}
 
           <div className="relative" ref={menuRef}>
@@ -158,16 +215,24 @@ export function Header({ activeSection = 'home', onSelectSection }: HeaderProps)
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               aria-label={user ? `Account menu for ${user.fullName}` : 'Account menu'}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/25 text-xs font-semibold text-white transition-colors hover:border-bright-gold"
+              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                user
+                  ? 'bg-gold text-heading hover:bg-bright-gold'
+                  : 'border border-white/25 bg-white/[0.05] text-white hover:border-bright-gold hover:text-bright-gold'
+              }`}
             >
-              {user ? initialsOf(user.fullName) : <UserRound className="h-4 w-4" aria-hidden="true" />}
+              {user ? (
+                initialsOf(user.fullName)
+              ) : (
+                <UserRound className="h-4 w-4" aria-hidden="true" />
+              )}
             </button>
 
             {menuOpen && (
               <div
                 role="menu"
                 aria-label="Account"
-                className="absolute right-0 mt-2 w-64 overflow-hidden rounded-control border border-white/15 bg-primary-dark shadow-xl shadow-black/40"
+                className="absolute right-0 mt-2 w-64 overflow-hidden rounded-card border border-glass-border bg-primary-dark shadow-xl shadow-black/50"
               >
                 <div className="border-b border-white/10 px-4 py-3">
                   {user ? (
@@ -178,7 +243,9 @@ export function Header({ activeSection = 'home', onSelectSection }: HeaderProps)
                   ) : (
                     <>
                       <p className="text-sm text-white">Browsing as a guest</p>
-                      <p className="mt-0.5 text-xs text-white/55">You don’t need an account to book.</p>
+                      <p className="mt-0.5 text-xs text-white/55">
+                        You don’t need an account to book.
+                      </p>
                     </>
                   )}
                 </div>
@@ -187,7 +254,10 @@ export function Header({ activeSection = 'home', onSelectSection }: HeaderProps)
                   <MenuItem icon={User} onClick={() => goToProfilePage('/me/details')}>
                     My details
                   </MenuItem>
-                  <MenuItem icon={HeartHandshake} onClick={() => goToProfilePage('/me/contributions')}>
+                  <MenuItem
+                    icon={HeartHandshake}
+                    onClick={() => goToProfilePage('/me/contributions')}
+                  >
                     My contributions
                   </MenuItem>
                   <MenuItem icon={Ticket} onClick={() => goToProfilePage('/me/bookings')}>
