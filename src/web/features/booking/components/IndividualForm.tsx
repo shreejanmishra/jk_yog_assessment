@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
   isLegalAdultBooker,
   isValidAgeInteger,
@@ -23,6 +24,7 @@ export function IndividualForm(): React.ReactElement {
   const updateAttendee = useBookingStore((s) => s.updateAttendee);
   const openCheckoutModal = useBookingStore((s) => s.openCheckoutModal);
 
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const selfAttendee = draft.attendees[0]!;
@@ -34,6 +36,16 @@ export function IndividualForm(): React.ReactElement {
   const parsedAge = parseIntegerAge(draft.booker.ageInput);
   const hasAgeTyped = draft.booker.ageInput.trim().length > 0;
 
+  const quoteIssues = quoteState.status === 'invalid' ? quoteState.issues : [];
+  const serverPhoneIssue =
+    quoteIssues.find((iss) => iss.path.includes('phone'))?.message ?? null;
+  const serverEmailIssue =
+    quoteIssues.find((iss) => iss.path.includes('email'))?.message ?? null;
+  const serverAgeIssue =
+    quoteIssues.find((iss) => iss.path.includes('age'))?.message ?? null;
+  const serverDaysIssue =
+    quoteIssues.find((iss) => iss.path.endsWith('.days'))?.message ?? null;
+
   let ageError: string | null = null;
   if (hasAgeTyped || attemptedSubmit) {
     if (!hasAgeTyped) {
@@ -42,6 +54,8 @@ export function IndividualForm(): React.ReactElement {
       ageError = 'Please enter a whole-number age between 0 and 120.';
     } else if (!isLegalAdultBooker(parsedAge)) {
       ageError = `Booker is less than 18 (entered ${parsedAge}). Tickets must be booked by someone aged 18 or older.`;
+    } else if (serverAgeIssue) {
+      ageError = serverAgeIssue;
     }
   }
 
@@ -52,37 +66,76 @@ export function IndividualForm(): React.ReactElement {
   const phoneError =
     attemptedSubmit && !isValidPhone(draft.booker.phone)
       ? 'Please enter a valid phone number (7–15 digits).'
-      : null;
+      : isValidPhone(draft.booker.phone) && serverPhoneIssue
+        ? serverPhoneIssue
+        : null;
   const emailError =
     attemptedSubmit && !isValidEmail(draft.booker.email)
       ? 'Please enter a valid email address.'
-      : null;
+      : isValidEmail(draft.booker.email) && serverEmailIssue
+        ? serverEmailIssue
+        : null;
   const daysError =
     attemptedSubmit &&
     selfAttendee.passKind === 'day_pass' &&
     selfAttendee.days.length === 0
       ? 'Select at least one evening.'
-      : null;
+      : serverDaysIssue;
 
-  const isUnder18Blocked = hasAgeTyped && isValidAgeInteger(parsedAge) && parsedAge < 18;
-  const stockIssues =
-    quoteState.status === 'invalid'
-      ? quoteState.issues.filter((iss) => iss.path.startsWith('stock.') || iss.path.includes('extras'))
-      : [];
+  const remainingQuoteIssues = quoteIssues.filter(
+    (iss) =>
+      !iss.path.includes('phone') &&
+      !iss.path.includes('email') &&
+      !iss.path.includes('age') &&
+      !iss.path.endsWith('.days'),
+  );
+  const stockIssues = remainingQuoteIssues.filter(
+    (iss) => iss.path.startsWith('stock.') || iss.path.includes('extras'),
+  );
+
+  const scrollToFirstProblem = (): void => {
+    const root = formRef.current;
+    if (!root) return;
+    const target = root.querySelector<HTMLElement>(
+      '[aria-invalid="true"], [data-has-violation="true"]',
+    );
+    if (!target) return;
+
+    // 1. Focus first with preventScroll: true so focus never cancels the subsequent smooth scroll.
+    const focusEl = target.matches('input, button, select, textarea')
+      ? target
+      : target.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled)');
+    focusEl?.focus({ preventScroll: true });
+
+    // 2. Scroll the window smoothly on the next frame so the field and its label sit cleanly below the sticky header.
+    const anchor = target.closest('div') ?? target;
+    window.requestAnimationFrame(() => {
+      const rect = anchor.getBoundingClientRect();
+      const targetTop = Math.max(0, window.scrollY + rect.top - 120);
+      window.scrollTo({ top: targetTop, behavior: 'smooth' });
+    });
+  };
 
   const handleConfirm = (e: React.FormEvent): void => {
     e.preventDefault();
-    setAttemptedSubmit(true);
+    flushSync(() => {
+      setAttemptedSubmit(true);
+    });
 
     if (
       draft.booker.fullName.trim().length < 2 ||
       !isValidPhone(draft.booker.phone) ||
+      Boolean(serverPhoneIssue) ||
       !isValidEmail(draft.booker.email) ||
+      Boolean(serverEmailIssue) ||
       !isLegalAdultBooker(parsedAge) ||
+      Boolean(serverAgeIssue) ||
       (selfAttendee.passKind === 'day_pass' && selfAttendee.days.length === 0) ||
+      Boolean(serverDaysIssue) ||
       selectedPassSoldOut ||
-      stockIssues.length > 0
+      remainingQuoteIssues.length > 0
     ) {
+      scrollToFirstProblem();
       return;
     }
 
@@ -90,7 +143,7 @@ export function IndividualForm(): React.ReactElement {
   };
 
   return (
-    <form onSubmit={handleConfirm} noValidate className="space-y-10">
+    <form ref={formRef} onSubmit={handleConfirm} noValidate className="space-y-10">
       <FormSection
         step="1"
         title="Your details"
@@ -171,9 +224,12 @@ export function IndividualForm(): React.ReactElement {
         />
       </FormSection>
 
-      {stockIssues.length > 0 && (
-        <div className="space-y-1 rounded-card border border-error/70 bg-error/[0.06] px-5 py-4">
-          {stockIssues.map((iss, idx) => (
+      {remainingQuoteIssues.length > 0 && (
+        <div
+          data-has-violation="true"
+          className="space-y-1 rounded-card border border-error/70 bg-error/[0.06] px-5 py-4"
+        >
+          {remainingQuoteIssues.map((iss, idx) => (
             <FieldError key={`${iss.code}-${idx}`} message={iss.message} />
           ))}
         </div>
@@ -186,7 +242,7 @@ export function IndividualForm(): React.ReactElement {
         <Button
           type="submit"
           size="lg"
-          disabled={isUnder18Blocked || selectedPassSoldOut || stockIssues.length > 0}
+          disabled={selectedPassSoldOut || stockIssues.length > 0}
         >
           Confirm and review pass
         </Button>
